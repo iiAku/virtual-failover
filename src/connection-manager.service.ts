@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { $ } from "bun";
 import { Duration } from "luxon";
 import { PinoLogger } from "nestjs-pino";
+import ping from "ping";
 import { AppConfig } from "./app.config";
 
 export enum ConnectionState {
@@ -31,7 +32,28 @@ export class ConnectionManagerService implements OnModuleDestroy {
     interfaceName: string,
     monitoringUrl: string,
   ) {
+    this.logger.info(
+      {
+        interfaceName,
+        monitoringUrl,
+      },
+      "Checking connectivity against",
+    );
     return $`curl --interface ${interfaceName} -sI --max-time 2 ${monitoringUrl}`.quiet();
+  }
+
+  async checkConnectivityFiber(interfaceName) {
+    const mapping = {
+      ["enp39s0f3u1u3"]: "192.168.68.52",
+      ["enp34s0"]: "192.168.1.104",
+    };
+    const pong = await ping.promise.probe("1.1.1.1", {
+      sourceAddr: mapping[interfaceName],
+      timeout: 5,
+      min_reply: 3,
+    });
+    this.logger.warn(pong);
+    return pong?.alive ? Promise.resolve() : Promise.reject();
   }
 
   async getUUIDFromDevice(device: string) {
@@ -143,10 +165,13 @@ export class ConnectionManagerService implements OnModuleDestroy {
     const { PRIMARY_CONNECTION, FAILOVER_CONNECTION, MONITORING_URL } =
       this.appConfig;
 
+    const randomMonitoringUrl =
+      MONITORING_URL[Math.floor(Math.random() * MONITORING_URL.length)];
+
     const [primary, failover] = (
       await Promise.allSettled([
-        this.checkConnectivityByInterface(PRIMARY_CONNECTION, MONITORING_URL),
-        this.checkConnectivityByInterface(FAILOVER_CONNECTION, MONITORING_URL),
+        this.checkConnectivityFiber(PRIMARY_CONNECTION),
+        this.checkConnectivityFiber(FAILOVER_CONNECTION),
       ])
     ).map((promise: { status: string }) => promise.status === "fulfilled");
 
