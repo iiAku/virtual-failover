@@ -5,6 +5,7 @@ import { Duration } from "luxon";
 import { PinoLogger } from "nestjs-pino";
 import ping from "ping";
 import { AppConfig } from "./app.config";
+import {setTimeout} from 'node:timers/promises'
 
 export enum ConnectionState {
   NONE = "NONE",
@@ -17,6 +18,7 @@ export class ConnectionManagerService implements OnModuleDestroy {
   private readonly appConfig: AppConfig;
   private readonly currentState = { state: ConnectionState.NONE };
   private setIntervalTimeout: Timer | null;
+
   constructor(
     private readonly logger: PinoLogger,
     private readonly configService: ConfigService,
@@ -112,46 +114,52 @@ export class ConnectionManagerService implements OnModuleDestroy {
     //The Linux kernel uses metrics to prioritize routes; a lower metric means a higher priority
     switch (to) {
       case ConnectionState.NONE:
-        await this.setRoutePriority({
-          connectionName: PRIMARY_CONNECTION,
-          routeMetrics: 0,
-          autoconnectPriority: 0,
-        });
-        await this.setRoutePriority({
-          connectionName: FAILOVER_CONNECTION,
-          routeMetrics: 0,
-          autoconnectPriority: 0,
-        });
+        await Promise.all([
+          this.setRoutePriority({
+            connectionName: PRIMARY_CONNECTION,
+            routeMetrics: 0,
+            autoconnectPriority: 0,
+          }),
+          this.setRoutePriority({
+            connectionName: FAILOVER_CONNECTION,
+            routeMetrics: 0,
+            autoconnectPriority: 0,
+          })
+        ])
         this.logger.info(
           `Changing from ${from} to ${to} connection is active.`,
         );
         break;
       case ConnectionState.PRIMARY:
-        await this.setRoutePriority({
-          connectionName: PRIMARY_CONNECTION,
-          routeMetrics: 200,
-          autoconnectPriority: 300,
-        });
-        await this.setRoutePriority({
-          connectionName: FAILOVER_CONNECTION,
-          routeMetrics: 300,
-          autoconnectPriority: 200,
-        });
+        await Promise.all([
+          this.setRoutePriority({
+            connectionName: PRIMARY_CONNECTION,
+            routeMetrics: 200,
+            autoconnectPriority: 300,
+          }),
+          this.setRoutePriority({
+            connectionName: FAILOVER_CONNECTION,
+            routeMetrics: 300,
+            autoconnectPriority: 200,
+          })
+        ])
         this.logger.info(
           `Changing from ${from} to ${to} connection is active.`,
         );
         break;
       case ConnectionState.BACKUP:
-        await this.setRoutePriority({
-          connectionName: PRIMARY_CONNECTION,
-          routeMetrics: 300,
-          autoconnectPriority: 200,
-        });
-        await this.setRoutePriority({
-          connectionName: FAILOVER_CONNECTION,
-          routeMetrics: 100,
-          autoconnectPriority: 400,
-        });
+        await Promise.all([
+          this.setRoutePriority({
+            connectionName: PRIMARY_CONNECTION,
+            routeMetrics: 300,
+            autoconnectPriority: 200,
+          }),
+          this.setRoutePriority({
+            connectionName: FAILOVER_CONNECTION,
+            routeMetrics: 100,
+            autoconnectPriority: 400,
+          })
+        ])
         this.logger.info(
           `Changing from ${from} to ${to} connection is active.`,
         );
@@ -170,8 +178,8 @@ export class ConnectionManagerService implements OnModuleDestroy {
 
     const [primary, failover] = (
       await Promise.allSettled([
-        this.checkConnectivityFiber(PRIMARY_CONNECTION),
-        this.checkConnectivityFiber(FAILOVER_CONNECTION),
+        this.checkConnectivityByInterface(PRIMARY_CONNECTION, randomMonitoringUrl),
+        this.checkConnectivityByInterface(FAILOVER_CONNECTION, randomMonitoringUrl)
       ])
     ).map((promise: { status: string }) => promise.status === "fulfilled");
 
@@ -179,6 +187,7 @@ export class ConnectionManagerService implements OnModuleDestroy {
     this.logger.info(
       `Failover connection is ${failover ? "up ✅" : "down ❌"}`,
     );
+
 
     if (!primary && !failover) {
       this.logger.info("Both connections are disabled. Nothing to do. 🙅");
@@ -244,6 +253,12 @@ export class ConnectionManagerService implements OnModuleDestroy {
       async () => this.connexionManager(),
       runIntervalDuration,
     );
+
+    while(true){
+      this.connexionManager()
+      await setTimeout()
+    }
+
   }
 
   onModuleDestroy(): any {
