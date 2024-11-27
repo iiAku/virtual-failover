@@ -1,21 +1,40 @@
 import { z } from "zod";
 
+export const MONITORING_URL = [
+  "https://1.1.1.1",
+  "https://baidu.com",
+  "https://bing.com",
+  "https://duckduckgo.com",
+  "https://example.com",
+  "https://facebook.com",
+  "https://google.com",
+  "https://instagram.com",
+  "https://apple.com",
+  "https://pinterest.com",
+  "https://reddit.com",
+  "https://t.me",
+  "https://temu.com",
+  "https://tiktok.com",
+  "https://whatsapp.com",
+  "https://wikipedia.org",
+  "https://yahoo.com",
+  "https://youtube.com",
+  "https://zoom.us",
+  "https://x.com",
+  "https://aliexpress.com",
+  "https://yandex.ru",
+  "https://ebay.com",
+  "https://live.com",
+  "https://twitch.tv",
+  "https://netflix.com",
+  "https://linkedin.com",
+];
+
 export const appConfig = z.object({
-  PRIMARY_CONNECTION: z.string().default("enp34s0"),
-  FAILOVER_CONNECTION: z.string().default("enp39s0f3u1c4i2"),
-  MONITORING_URL: z
-    .string()
-    .default("http://1.1.1.1,http://1.1.1.1,http://8.8.4,4,http://8.8.8.8")
-    .transform((value) => value.split(",")),
-  CHECK_INTERVAL_IN_SECONDS: z.coerce.number().default(3),
+  PRIMARY_CONNECTION: z.string(),
+  PRIMARY_CHECK_INTERVAL_IN_SECONDS: z.coerce.number().default(5),
+  BACKUP_CONNECTION: z.string(),
+  BACKUP_CHECK_INTERVAL_IN_SECONDS: z.coerce.number().default(30),
 });
 
 export type AppConfig = z.infer<typeof appConfig>;
-
-http://1.1.1.1
-http://8.8.8.8
-http://8.8.4.4
-http://9.9.9.9
-http://208.67.222.222
-http://208.67.220.220
-
