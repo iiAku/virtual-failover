@@ -1,99 +1,211 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Virtual Failover
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+**Virtual Failover** is a Bun/Node.js application that provides a VRRP-like (Virtual Router Redundancy Protocol) failover mechanism using `nmcli` for network management. Designed for Linux systems, it monitors multiple network interfaces and switches between primary and backup interfaces based on network connectivity status.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+The application is built with [NestJS](https://nestjs.com) and leverages [Bun](https://bun.sh) or Node.js for runtime.
 
-## Description
+---
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Features
 
-## Project setup
+- Monitors connectivity on two network interfaces.
+- Automatically switches to the backup interface if the primary interface fails.
+- Restores the primary interface when connectivity is regained.
+- Configurable delay-based ping monitoring.
+- Lightweight and optimized for Linux systems using `nmcli`.
+
+---
+
+## What it's looks like when running:
 
 ```bash
-$ pnpm install
+[16:50:00.438] WARN (1470255): Primary connection seems to be down, checking again
+[16:50:00.438] INFO (1470255): Checking connectivity against
+[16:50:00.438] INFO (1470255): Checking connectivity against
+[16:50:01.453] INFO (1470255): Current check interval is 5 seconds
+[16:50:01.453] INFO (1470255): Primary connection is down ❌
+[16:50:01.453] INFO (1470255): Backup connection is up ✅
+[16:50:01.453] INFO (1470255): Connection state is PRIMARY
+[16:50:02.515] INFO (1470255): Setting route priority for connection eth0
+[16:50:03.427] INFO (1470255): Setting route priority for connection eth1
+[16:50:03.738] INFO (1470255): Connection (eth0) took 1223ms to restart.
+[16:50:03.738] INFO (1470255): Connection (eth0) ipv4.route-metric=300 ✅
+[16:50:03.738] INFO (1470255): Connection (eth0) ipv6.route-metric=300 ✅
+[16:50:03.738] INFO (1470255): Connection (eth0) connection.autoconnect-priority=200 ✅
+[16:50:03.751] INFO (1470255): Connection (eth1) took 323ms to restart.
+[16:50:03.751] INFO (1470255): Connection (eth1) ipv4.route-metric=100 ✅
+[16:50:03.751] INFO (1470255): Connection (eth1) ipv6.route-metric=100 ✅
+[16:50:03.751] INFO (1470255): Connection (eth1) connection.autoconnect-priority=400 ✅
+[16:50:03.751] INFO (1470255): Changing from PRIMARY to BACKUP connection is active.
+[16:50:03.751] INFO (1470255): Primary connection is down ❌ - Activating backup 🔄
+[16:50:04.423] INFO (1470255): Checking connectivity against
+[16:50:04.424] INFO (1470255): Checking connectivity against
+[16:50:05.440] INFO (1470255): Current check interval is 30 seconds
+[16:50:05.440] INFO (1470255): Primary connection is up ✅
+[16:50:05.440] INFO (1470255): Backup connection is down ❌
+[16:50:05.440] INFO (1470255): Connection state is BACKUP
+[16:50:06.448] INFO (1470255): Setting route priority for connection eth0
+[16:50:07.334] INFO (1470255): Setting route priority for connection eth1
+[16:50:07.622] INFO (1470255): Connection (eth1) took 288ms to restart.
+[16:50:07.622] INFO (1470255): Connection (eth1) ipv4.route-metric=300 ✅
+[16:50:07.622] INFO (1470255): Connection (eth1) ipv6.route-metric=300 ✅
+[16:50:07.622] INFO (1470255): Connection (eth1) connection.autoconnect-priority=200 ✅
+[16:50:07.637] INFO (1470255): Connection (eth0) took 1188ms to restart.
+[16:50:07.637] INFO (1470255): Connection (eth0) ipv4.route-metric=200 ✅
+[16:50:07.637] INFO (1470255): Connection (eth0) ipv6.route-metric=200 ✅
+[16:50:07.637] INFO (1470255): Connection (eth0) connection.autoconnect-priority=300 ✅
+[16:50:07.637] INFO (1470255): Changing from BACKUP to PRIMARY connection is active.
+[16:50:07.637] INFO (1470255): Primary connection is back up ✅ - Switching back to primary.
 ```
 
-## Compile and run the project
+## Requirements
+
+1. **System requirements**:
+    - Linux with `nmcli` installed and configured as the network manager.
+    - Two network interfaces with static IP configuration (recommended).
+    - User permissions to manage network interfaces (see [Setup](#setup)).
+
+2. **Software requirements**:
+    - [Bun](https://bun.sh) (preferred) or Node.js.
+    - [PM2](https://pm2.keymetrics.io/) for process management (optional).
+
+---
+### Part 1: Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/iiAku/virtual-failover.git
+   cd virtual-failover
+   
+2. Install dependencies using Bun or npm:
+   ```bash
+   bun install
+   # OR
+   npm install
+    ```
+---
+
+### Part 2: Configuration
+
+
+3. Ensure `nmcli` is installed:
+   ```bash
+   sudo apt install network-manager
+    ```
+4. Configure netplan to use nmcli as the renderer (example config):
+
+    ```bash
+       sudo nano /etc/netplan/01-netcfg.yaml
+    ```
+
+    ```yaml
+    network:
+      version: 2
+      ethernets:
+        eth0:
+          addresses:
+            - 192.168.1.100/24
+          gateway4: 192.168.1.1
+          nameservers:
+            addresses: [8.8.8.8, 8.8.4.4]
+        eth1:
+          addresses:
+            - 192.168.2.100/24
+          gateway4: 192.168.2.1
+          nameservers:
+            addresses: [8.8.8.8, 8.8.4.4]
+      renderer: NetworkManager
+    ```
+
+    > **Note**: Replace `eth0` and `eth1` with your primary and backup network interfaces.
+    
+5. Apply the netplan configuration:
+    ```bash
+        sudo netplan apply
+    ```
+
+---
+### Part 3: Permissions and Environment Variables
+
+
+### User Permissions
+
+By default, managing network interfaces requires root privileges. To allow non-root execution, create the following `polkit` rules:
+
+1. Create a new policy file:
+   ```bash
+   sudo nano /etc/polkit-1/rules.d/10-network-manager.rules
+    ```
+2. Add the following rules:
+
+    ```bash
+    polkit.addRule(function(action, subject) {
+        if ((action.id == "org.freedesktop.NetworkManager.network-control" ||
+             action.id == "org.freedesktop.NetworkManager.settings.modify.system" ||
+             action.id == "org.freedesktop.NetworkManager.settings.modify.own" ||
+             action.id == "org.freedesktop.NetworkManager.enable-disable-wifi" ||
+             action.id == "org.freedesktop.NetworkManager.enable-disable-network" ||
+             action.id == "org.freedesktop.NetworkManager.settings.modify.hostname") &&
+            subject.user == "YOUR_LINUX_USER") {
+            return polkit.Result.YES;
+        }
+    });
+    ```
+
+    > **Note**: Replace `YOUR_LINUX_USER` with your Linux username.
+
+---
+
+### Environment Variables
+
+    Create a `.env` file in the project root and add the following environment variables:
+
+
+### Description
+`PRIMARY_CONNECTION`: Name of the primary network interface (e.g., eth0).
+
+`PRIMARY_CHECK_INTERVAL_IN_SECONDS`: Interval (in seconds) to check the primary connection's status. Default: 5.
+
+`BACKUP_CONNECTION`: Name of the backup network interface (e.g., eth1).
+
+`BACKUP_CHECK_INTERVAL_IN_SECONDS`: Interval (in seconds) to check the backup connection's status. Default: 30.
+
+
+Example `.env` file:
 
 ```bash
-# development
-$ pnpm run start
-
-# watch mode
-$ pnpm run start:dev
-
-# production mode
-$ pnpm run start:prod
+PRIMARY_CONNECTION=eth0
+PRIMARY_CHECK_INTERVAL_IN_SECONDS=5
+BACKUP_CONNECTION=eth1
+BACKUP_CHECK_INTERVAL_IN_SECONDS=30
 ```
 
-## Run tests
+> **Note**: Adjust the values based on your network configuration and needs
 
-```bash
-# unit tests
-$ pnpm run test
+---
 
-# e2e tests
-$ pnpm run test:e2e
+### Part 4: Usage
 
-# test coverage
-$ pnpm run test:cov
-```
+1. Start the application:
+   ```bash
+   # Using Bun
+   bun run start
 
-## Deployment
+   # OR Using npm
+   npm start
+   ```
+   
+2. For production, you can use PM2 with environment variables:
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+    See https://www.npmjs.com/package/pm2 if not installed.
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+    ```bash
+    PRIMARY_CONNECTION=eth1 BACKUP_CONNECTION=eth2 pm2 start bun --no-automation --name "VRRP" -- run start:prod
+    ```
+   
+    > **Note**: Replace `eth0` and `eth1` with your primary and backup network interfaces.
 
-```bash
-$ pnpm install -g mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+3. Monitor logs:
+    ```bash
+    pm2 logs VRRP
+    ```
