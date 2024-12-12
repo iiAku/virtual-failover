@@ -6,11 +6,12 @@ import { ConnectionManagerService } from "./connection-manager.service";
 
 
 const levelStrings = {
-  10: 'debug',
-  20: 'info',
-  30: 'warn',
-  40: 'error',
-  50: 'fatal'
+  10: 'trace',
+  20: 'debug',
+  30: 'info',
+  40: 'warn',
+  50: 'error',
+  60: 'fatal'
 };
 
 @Module({
