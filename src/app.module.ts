@@ -4,14 +4,22 @@ import { LoggerModule } from "nestjs-pino";
 import { appConfig } from "./app.config";
 import { ConnectionManagerService } from "./connection-manager.service";
 
+export enum LogLevel {
+  Trace = "trace",
+  Debug = "debug",
+  Info = "info",
+  Warn = "warn",
+  Error = "error",
+  Fatal = "fatal",
+}
 
 const levelStrings = {
-  10: 'trace',
-  20: 'debug',
-  30: 'info',
-  40: 'warn',
-  50: 'error',
-  60: 'fatal'
+  10: LogLevel.Trace,
+  20: LogLevel.Debug,
+  30: LogLevel.Info,
+  40: LogLevel.Warn,
+  50: LogLevel.Error,
+  60: LogLevel.Fatal,
 };
 
 @Module({
@@ -21,13 +29,13 @@ const levelStrings = {
       validate: (config: unknown) => appConfig.parse(config),
     }),
     LoggerModule.forRoot({
-      pinoHttp:{
-        formatters:{
-            level(label, number) {
-                return { level: levelStrings[number] || label };
-            }
-        }
-      }
+      pinoHttp: {
+        formatters: {
+          level(label, number) {
+            return { level: levelStrings[number] || label };
+          },
+        },
+      },
     }),
   ],
   providers: [ConnectionManagerService],

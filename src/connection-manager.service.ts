@@ -5,6 +5,7 @@ import { $ } from "bun";
 import { DateTime, Duration } from "luxon";
 import { PinoLogger } from "nestjs-pino";
 import { AppConfig, MONITORING_URL } from "./app.config";
+import { LogLevel } from "./app.module";
 
 export enum ConnectionState {
   NONE = "NONE",
@@ -103,13 +104,13 @@ export class ConnectionManagerService {
       `Connection (${connectionName}) took ${diff}ms to restart.`,
     );
 
-    this.logger.info(
+    this.logger[metricParam ? LogLevel.Info : LogLevel.Warn](
       `Connection (${connectionName}) ipv4.route-metric=${routeMetrics} ${metricParam ? "✅" : "❌"}`,
     );
-    this.logger.info(
+    this.logger[metricParamV6 ? LogLevel.Info : LogLevel.Warn](
       `Connection (${connectionName}) ipv6.route-metric=${routeMetrics} ${metricParamV6 ? "✅" : "❌"}`,
     );
-    this.logger.info(
+    this.logger[autoconnect ? LogLevel.Info : LogLevel.Warn](
       `Connection (${connectionName}) connection.autoconnect-priority=${autoconnectPriority} ${autoconnect ? "✅" : "❌"}`,
     );
   }
@@ -217,8 +218,12 @@ export class ConnectionManagerService {
     this.logger.info(
       `Current check interval is ${this.getCheckInterval().as("seconds")} seconds`,
     );
-    this.logger.info(`Primary connection is ${primary ? "up ✅" : "down ❌"}`);
-    this.logger.info(`Backup connection is ${backup ? "up ✅" : "down ❌"}`);
+    this.logger[primary ? LogLevel.Info : LogLevel.Warn](
+      `Primary connection is ${primary ? "up ✅" : "down ❌"}`,
+    );
+    this.logger[backup ? LogLevel.Info : LogLevel.Warn](
+      `Backup connection is ${backup ? "up ✅" : "down ❌"}`,
+    );
 
     if (!primary && !backup) {
       this.logger.info("Both connections are disabled. Nothing to do. 🙅");
@@ -254,7 +259,7 @@ export class ConnectionManagerService {
             from: this.currentState.state,
             to: ConnectionState.BACKUP,
           });
-          this.logger.info(
+          this.logger.error(
             "Primary connection is down ❌ - Activating backup 🔄",
           );
         }
