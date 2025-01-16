@@ -210,11 +210,21 @@ export class ConnectionManagerService {
     if (!primary) {
       //check a second time
       this.logger.warn("Primary connection seems to be down, checking again");
-      [primary, backup] = await this.checkLinks(
+      [primary] = await this.checkLinks(
         PRIMARY_CONNECTION,
         BACKUP_CONNECTION,
       );
     }
+
+    if (!primary && !backup) {
+      //check a second time
+      this.logger.warn("Primary and Backup both seems to be down, checking again");
+      [primary, backup] = await this.checkLinks(
+          PRIMARY_CONNECTION,
+          BACKUP_CONNECTION,
+      );
+    }
+
     this.logger.info(
       `Current check interval is ${this.getCheckInterval().as("seconds")} seconds`,
     );
@@ -227,10 +237,6 @@ export class ConnectionManagerService {
 
     if (!primary && !backup) {
       this.logger.info("Both connections are disabled. Nothing to do. 🙅");
-      await this.setConnectionState({
-        from: this.currentState.state,
-        to: ConnectionState.NONE,
-      });
       return;
     }
 
