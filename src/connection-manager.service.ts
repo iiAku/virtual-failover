@@ -207,30 +207,34 @@ export class ConnectionManagerService {
       BACKUP_CONNECTION,
     );
 
-    if (!primary) {
-      //check a second time
-      this.logger.warn("Primary connection seems to be down, checking again");
-      [primary] = await this.checkLinks(
+    if (!primary || !backup) {
+      if(!primary && !backup) {
+        this.logger.warn("Both connections seem to be down");
+      }else{
+        if(!primary) {
+          this.logger.warn("Primary connection seems to be down");
+        }
+        if(!backup) {
+          this.logger.warn("Backup connection seems to be down");
+        }
+      }
+      const checkResult = await this.checkLinks(
         PRIMARY_CONNECTION,
         BACKUP_CONNECTION,
       );
-    }
 
-    if (!primary && !backup) {
-      //check a second time
-      this.logger.warn("Primary and Backup both seems to be down, checking again");
-      [primary, backup] = await this.checkLinks(
-          PRIMARY_CONNECTION,
-          BACKUP_CONNECTION,
-      );
+      primary = checkResult[0] ? checkResult[0] : primary;
+      backup = checkResult[1] ? checkResult[1] : backup;
     }
 
     this.logger.info(
       `Current check interval is ${this.getCheckInterval().as("seconds")} seconds`,
     );
+
     this.logger[primary ? LogLevel.Info : LogLevel.Warn](
       `Primary connection is ${primary ? "up ✅" : "down ❌"}`,
     );
+
     this.logger[backup ? LogLevel.Info : LogLevel.Warn](
       `Backup connection is ${backup ? "up ✅" : "down ❌"}`,
     );
