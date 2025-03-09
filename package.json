@@ -6,6 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
+    "format": "biome format --write ./src",
     "build": "nest build",
     "start": "nest start",
     "start:dev": "nest start --watch --exec \"bun run\" | pino-pretty",
@@ -14,6 +15,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@biomejs/biome": "^1.9.4",
     "@nestjs/common": "^11.0.10",
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.10",
@@ -26,6 +28,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@types/luxon": "^3.4.2",
     "@nestjs/cli": "^11.0.4",
     "@types/bun": "^1.2.3",
     "@types/node": "^22.13.5",

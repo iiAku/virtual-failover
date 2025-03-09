@@ -30,16 +30,14 @@ export class ConnectionManagerService {
   }
 
   getCheckInterval() {
-    this.checkInterval = [
-      ConnectionState.NONE,
-      ConnectionState.PRIMARY,
-    ].includes(this.currentState.state)
-      ? Duration.fromObject({
-          seconds: this.appConfig.PRIMARY_CHECK_INTERVAL_IN_SECONDS,
-        })
-      : Duration.fromObject({
-          seconds: this.appConfig.BACKUP_CHECK_INTERVAL_IN_SECONDS,
-        });
+    this.checkInterval =
+      ConnectionState.BACKUP === this.currentState.state
+        ? Duration.fromObject({
+            seconds: this.appConfig.BACKUP_CHECK_INTERVAL_IN_SECONDS,
+          })
+        : Duration.fromObject({
+            seconds: this.appConfig.PRIMARY_CHECK_INTERVAL_IN_SECONDS,
+          });
     return this.checkInterval;
   }
 
@@ -184,62 +182,87 @@ export class ConnectionManagerService {
     ];
   }
 
-  async checkLinks(primaryConnection, backupConnection) {
-    return (
-      await Promise.allSettled([
-        this.checkConnectivityByInterface(
-          primaryConnection,
-          this.getRandomUrl(),
-        ),
-        this.checkConnectivityByInterface(
-          backupConnection,
-          this.getRandomUrl(),
-        ),
-      ])
-    ).map((promise: { status: string }) => promise.status === "fulfilled");
+  async checkLinks(connection: string[]) {
+    const checks = connection.map((connection) =>
+      this.checkConnectivityByInterface(connection, this.getRandomUrl()),
+    );
+    return (await Promise.allSettled(checks)).map(
+      (promise: { status: string }) => promise.status === "fulfilled",
+    );
   }
 
-  async connexionManager() {
-    const { PRIMARY_CONNECTION, BACKUP_CONNECTION } = this.appConfig;
+  async checkConnectionState() {
+    const { PRIMARY_CONNECTION, BACKUP_CONNECTION, SECOND_BACKUP_CONNECTION } =
+      this.appConfig;
 
-    let [primary, backup] = await this.checkLinks(
+    const linksToCheck = [
       PRIMARY_CONNECTION,
-      BACKUP_CONNECTION,
-    );
+      BACKUP_CONNECTION
+    ];
+
+    if(SECOND_BACKUP_CONNECTION){
+      linksToCheck.push(SECOND_BACKUP_CONNECTION);
+    }
+
+    const checks = await this.checkLinks(linksToCheck);
+
+    const [primaryCheck, backupCheck, fallbackCheck] = checks;
+
+    let backup = backupCheck || fallbackCheck || false;
+
+    let primary = primaryCheck;
+
+    if (!backupCheck) {
+      this.logger.warn(
+        "Primary backup connection seems to be down; checking again",
+      );
+    }
+
+    if (!fallbackCheck) {
+      this.logger.warn(
+        "Secondary backup connection seems to be down; checking again",
+      );
+    }
 
     if (!primary || !backup) {
-      if(!primary && !backup) {
+      if (!primary && !backup) {
         this.logger.warn("Both connections seem to be down");
-      }else{
-        if(!primary) {
+      } else {
+        if (!primary) {
           this.logger.warn("Primary connection seems to be down");
         }
-        if(!backup) {
+        if (!backup) {
           this.logger.warn("Backup connection seems to be down");
         }
       }
-      const checkResult = await this.checkLinks(
-        PRIMARY_CONNECTION,
-        BACKUP_CONNECTION,
-      );
 
-      primary = checkResult[0] ? checkResult[0] : primary;
-      backup = checkResult[1] ? checkResult[1] : backup;
+      const checkResult = await this.checkLinks(linksToCheck);
+
+      primary = [true, false].includes(checkResult[0])
+        ? checkResult[0]
+        : primary;
+      backup = [true, false].includes(checkResult[1]) ? checkResult[1] : backup;
     }
+
+    return { isPrimaryUp: primary, isBackupUp: backup };
+  }
+
+  async connexionManager() {
+    const { isPrimaryUp, isBackupUp } = await this.checkConnectionState();
 
     this.logger.info(
       `Current check interval is ${this.getCheckInterval().as("seconds")} seconds`,
     );
 
-    this.logger[primary ? LogLevel.Info : LogLevel.Warn](
-      `Primary connection is ${primary ? "up ✅" : "down ❌"}`,
+    this.logger[isPrimaryUp ? LogLevel.Info : LogLevel.Warn](
+      `Primary connection is ${isPrimaryUp ? "up ✅" : "down ❌"}`,
     );
 
-    this.logger[backup ? LogLevel.Info : LogLevel.Warn](
-      `Backup connection is ${backup ? "up ✅" : "down ❌"}`,
+    this.logger[isBackupUp ? LogLevel.Info : LogLevel.Warn](
+      `Backup connection is ${isBackupUp ? "up ✅" : "down ❌"}`,
     );
 
-    if (!primary && !backup) {
+    if (!isPrimaryUp && !isBackupUp) {
       this.logger.info("Both connections are disabled. Nothing to do. 🙅");
       return;
     }
@@ -248,7 +271,7 @@ export class ConnectionManagerService {
 
     switch (this.currentState.state) {
       case ConnectionState.NONE:
-        if (!primary) {
+        if (!isPrimaryUp) {
           await this.setConnectionState({
             from: this.currentState.state,
             to: ConnectionState.BACKUP,
@@ -264,7 +287,7 @@ export class ConnectionManagerService {
         break;
 
       case ConnectionState.PRIMARY:
-        if (!primary) {
+        if (!isPrimaryUp) {
           await this.setConnectionState({
             from: this.currentState.state,
             to: ConnectionState.BACKUP,
@@ -276,7 +299,7 @@ export class ConnectionManagerService {
         break;
 
       case ConnectionState.BACKUP:
-        if (primary) {
+        if (isPrimaryUp) {
           await this.setConnectionState({
             from: this.currentState.state,
             to: ConnectionState.PRIMARY,
@@ -295,7 +318,7 @@ export class ConnectionManagerService {
 
   async start() {
     while (true) {
-      this.connexionManager();
+      await this.connexionManager();
       await setTimeout(this.getCheckInterval().as("milliseconds"));
     }
   }
