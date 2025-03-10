@@ -6,12 +6,9 @@ import { DateTime, Duration } from "luxon";
 import { PinoLogger } from "nestjs-pino";
 import { AppConfig, MONITORING_URL } from "./app.config";
 import { LogLevel } from "./app.module";
-
-export enum ConnectionState {
-  NONE = "NONE",
-  PRIMARY = "PRIMARY",
-  BACKUP = "BACKUP",
-}
+import { Connection, ConnectionState } from "./connection.type";
+import { retryPolicy } from "./retry.policy";
+import { IRetryContext } from "cockatiel";
 
 @Injectable()
 export class ConnectionManagerService {
@@ -49,10 +46,12 @@ export class ConnectionManagerService {
 
   async checkConnectivityByInterface(
     interfaceName: string,
-    monitoringUrl: string,
+    ctx: IRetryContext,
   ) {
+    const monitoringUrl = this.getRandomUrl();
     this.logger.info(
       {
+        attempt: ctx.attempt,
         interfaceName,
         monitoringUrl,
       },
@@ -184,71 +183,55 @@ export class ConnectionManagerService {
 
   async checkLinks(connection: string[]) {
     const checks = connection.map((connection) =>
-      this.checkConnectivityByInterface(connection, this.getRandomUrl()),
+      retryPolicy.execute((ctx) =>
+        this.checkConnectivityByInterface(connection, ctx),
+      ),
     );
     return (await Promise.allSettled(checks)).map(
       (promise: { status: string }) => promise.status === "fulfilled",
     );
   }
 
-  async checkConnectionState() {
-    const { PRIMARY_CONNECTION, BACKUP_CONNECTION, SECOND_BACKUP_CONNECTION } =
+  async checkConnectionState(connections: Connection) {
+    const { PRIMARY_CONNECTION, BACKUP_CONNECTION, FALLBACK_CONNECTION } =
       this.appConfig;
 
     const linksToCheck = [
       PRIMARY_CONNECTION,
-      BACKUP_CONNECTION
+      BACKUP_CONNECTION,
+      ...(FALLBACK_CONNECTION ? [FALLBACK_CONNECTION] : []),
     ];
-
-    if(SECOND_BACKUP_CONNECTION){
-      linksToCheck.push(SECOND_BACKUP_CONNECTION);
-    }
 
     const checks = await this.checkLinks(linksToCheck);
 
-    const [primaryCheck, backupCheck, fallbackCheck] = checks;
+    const [isPrimaryUp, isBackupUp, isFallbackUp] = checks;
 
-    let backup = backupCheck || fallbackCheck || false;
+    const primary = isPrimaryUp;
 
-    let primary = primaryCheck;
+    const backup = isBackupUp || isFallbackUp || false;
 
-    if (!backupCheck) {
-      this.logger.warn(
-        "Primary backup connection seems to be down; checking again",
+    const before = structuredClone(connections).BACKUP_CONNECTION;
+
+    connections.BACKUP_CONNECTION = isBackupUp
+      ? BACKUP_CONNECTION
+      : isFallbackUp
+        ? FALLBACK_CONNECTION
+        : BACKUP_CONNECTION;
+
+    const after = structuredClone(connections).BACKUP_CONNECTION;
+
+    if (before !== after) {
+      this.logger.info(
+        `Switching backup connection from ${before} to ${after}`,
       );
-    }
-
-    if (!fallbackCheck) {
-      this.logger.warn(
-        "Secondary backup connection seems to be down; checking again",
-      );
-    }
-
-    if (!primary || !backup) {
-      if (!primary && !backup) {
-        this.logger.warn("Both connections seem to be down");
-      } else {
-        if (!primary) {
-          this.logger.warn("Primary connection seems to be down");
-        }
-        if (!backup) {
-          this.logger.warn("Backup connection seems to be down");
-        }
-      }
-
-      const checkResult = await this.checkLinks(linksToCheck);
-
-      primary = [true, false].includes(checkResult[0])
-        ? checkResult[0]
-        : primary;
-      backup = [true, false].includes(checkResult[1]) ? checkResult[1] : backup;
     }
 
     return { isPrimaryUp: primary, isBackupUp: backup };
   }
 
-  async connexionManager() {
-    const { isPrimaryUp, isBackupUp } = await this.checkConnectionState();
+  async connexionManager(connections: Connection) {
+    const { isPrimaryUp, isBackupUp } =
+      await this.checkConnectionState(connections);
 
     this.logger.info(
       `Current check interval is ${this.getCheckInterval().as("seconds")} seconds`,
@@ -317,8 +300,12 @@ export class ConnectionManagerService {
   }
 
   async start() {
+    const connections: Connection = {
+      PRIMARY_CONNECTION: this.appConfig.PRIMARY_CONNECTION,
+      BACKUP_CONNECTION: this.appConfig.BACKUP_CONNECTION,
+    };
     while (true) {
-      await this.connexionManager();
+      await this.connexionManager(connections);
       await setTimeout(this.getCheckInterval().as("milliseconds"));
     }
   }

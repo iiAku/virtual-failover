@@ -8,7 +8,7 @@ The application is built with [NestJS](https://nestjs.com) and leverages [Bun](h
 
 ## Features
 
-- Monitors connectivity on two network interfaces.
+- Monitors connectivity on 2 (default) or 3 (optional for the third, which is a fallback) network interfaces.
 - Automatically switches to the backup interface if the primary interface fails.
 - Restores the primary interface when connectivity is regained.
 - Configurable delay-based ping monitoring.
