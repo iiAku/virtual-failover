@@ -32,8 +32,9 @@ export const MONITORING_URL = [
 
 export const appConfig = z.object({
   PRIMARY_CONNECTION: z.string(),
-  PRIMARY_CHECK_INTERVAL_IN_SECONDS: z.coerce.number().default(5),
   BACKUP_CONNECTION: z.string(),
+  FALLBACK_CONNECTION: z.string().optional(),
+  PRIMARY_CHECK_INTERVAL_IN_SECONDS: z.coerce.number().default(5),
   BACKUP_CHECK_INTERVAL_IN_SECONDS: z.coerce.number().default(30),
 });
 
