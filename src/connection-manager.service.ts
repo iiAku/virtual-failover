@@ -3,12 +3,13 @@ import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { $ } from "bun";
 import { DateTime, Duration } from "luxon";
-import { PinoLogger } from "nestjs-pino";
 import { AppConfig, MONITORING_URL } from "./app.config";
 import { LogLevel } from "./app.module";
 import { Connection, ConnectionState } from "./connection.type";
 import { retryPolicy } from "./retry.policy";
 import { IRetryContext } from "cockatiel";
+import { CustomError, ErrorCode } from "./system/error/custom.error";
+import { Logger } from "./system/logger/logger.port";
 
 @Injectable()
 export class ConnectionManagerService {
@@ -16,13 +17,18 @@ export class ConnectionManagerService {
   private readonly currentState = { state: ConnectionState.NONE };
   private readonly monitoringUrl: string[] = MONITORING_URL;
   private checkInterval: Duration;
+  private readonly connections: Connection;
   constructor(
-    private readonly logger: PinoLogger,
+    private readonly logger: Logger,
     private readonly configService: ConfigService,
   ) {
     this.appConfig = this.configService.get<AppConfig>(
       "_PROCESS_ENV_VALIDATED",
     );
+    this.connections = {
+      PRIMARY_CONNECTION: this.appConfig.PRIMARY_CONNECTION,
+      BACKUP_CONNECTION: this.appConfig.BACKUP_CONNECTION,
+    };
     console.log({ conf: this.appConfig });
   }
 
@@ -38,9 +44,9 @@ export class ConnectionManagerService {
     return this.checkInterval;
   }
 
-  async getUUIDFromDevice(device: string) {
+  async getUUID(connectionName: string) {
     const result =
-      await $`nmcli -t -f UUID,DEVICE connection show --active | grep "${device}" | cut -d: -f1`.quiet();
+      await $`nmcli -t -f UUID,DEVICE connection show --active | grep "${connectionName}" | cut -d: -f1`.quiet();
     return result.text().trim();
   }
 
@@ -49,20 +55,45 @@ export class ConnectionManagerService {
     ctx: IRetryContext,
   ) {
     const monitoringUrl = this.getRandomUrl();
-    this.logger.info(
-      {
-        attempt: ctx.attempt,
-        interfaceName,
-        monitoringUrl,
-      },
-      "Checking connectivity against",
-    );
+    this.logger.info("Checking connectivity against", {
+      attempt: ctx.attempt,
+      interfaceName,
+      monitoringUrl,
+    });
     return $`curl --interface ${interfaceName} -sI --max-time 1 --connect-timeout 1 ${monitoringUrl}`.quiet();
   }
 
+  async bringUpAllInterfaces() {
+    try {
+      this.logger.info("Trying to bring up all interfaces");
+      const up = [
+        this.connections.PRIMARY_CONNECTION,
+        this.connections.BACKUP_CONNECTION,
+      ].map((connection) => $`nmcli device connect ${connection}`.quiet());
+      const [primaryConnection, backupConnection] =
+        await Promise.allSettled(up);
+
+      this.logger.info(
+        "Because something went wrong at last resort we tried to bring back all interfaces up",
+        {
+          primary: primaryConnection.status === "fulfilled" ? "✅" : "❌",
+          backup: backupConnection.status === "fulfilled" ? "✅" : "❌",
+        },
+      );
+    } catch (e) {
+      this.logger.error("Failed to bring up all interfaces", e);
+    }
+  }
+
   async reconnect(connectionName: string) {
-    await $`nmcli device disconnect ${connectionName}`.quiet();
-    await $`nmcli device connect ${connectionName}`.quiet();
+    try {
+      await $`nmcli device disconnect ${connectionName}`.quiet();
+      await $`nmcli device connect ${connectionName}`.quiet();
+    } catch (e) {
+      //This is fine even if we fail to reconnect interfaces, routing (prios through metrics) should be reflected
+      this.logger.error(`Failed to reconnect ${connectionName}`, e);
+      await this.bringUpAllInterfaces();
+    }
   }
 
   async setRoutePriority({
@@ -74,7 +105,7 @@ export class ConnectionManagerService {
     routeMetrics: number;
     autoconnectPriority: number;
   }) {
-    const deviceUUID = await this.getUUIDFromDevice(connectionName);
+    const deviceUUID = await this.getUUID(connectionName);
 
     const updateLinkPriority =
       $`nmcli connection modify ${deviceUUID} ipv4.route-metric ${routeMetrics}`.quiet();
@@ -202,6 +233,14 @@ export class ConnectionManagerService {
       ...(FALLBACK_CONNECTION ? [FALLBACK_CONNECTION] : []),
     ];
 
+    const areConnectionManaged = (
+      await Promise.all(linksToCheck.map((device) => this.getUUID(device)))
+    ).filter((value) => !!value);
+
+    if (linksToCheck.length != areConnectionManaged.length) {
+      throw new CustomError(ErrorCode.UNKNOWN_CONNECTION_LINK, linksToCheck);
+    }
+
     const checks = await this.checkLinks(linksToCheck);
 
     const [isPrimaryUp, isBackupUp, isFallbackUp] = checks;
@@ -217,6 +256,12 @@ export class ConnectionManagerService {
       : isFallbackUp
         ? FALLBACK_CONNECTION
         : BACKUP_CONNECTION;
+
+    this.logger.info("Connectivity state", {
+      primary: isPrimaryUp ? "✅" : "❌",
+      backup: isBackupUp ? "✅" : "❌",
+      ...(FALLBACK_CONNECTION ? { fallback: isFallbackUp ? "✅" : "❌" } : {}),
+    });
 
     const after = structuredClone(connections).BACKUP_CONNECTION;
 
@@ -239,10 +284,12 @@ export class ConnectionManagerService {
 
     this.logger[isPrimaryUp ? LogLevel.Info : LogLevel.Warn](
       `Primary connection is ${isPrimaryUp ? "up ✅" : "down ❌"}`,
+      { name: connections.PRIMARY_CONNECTION },
     );
 
     this.logger[isBackupUp ? LogLevel.Info : LogLevel.Warn](
       `Backup connection is ${isBackupUp ? "up ✅" : "down ❌"}`,
+      { name: connections.BACKUP_CONNECTION },
     );
 
     if (!isPrimaryUp && !isBackupUp) {
@@ -300,12 +347,8 @@ export class ConnectionManagerService {
   }
 
   async start() {
-    const connections: Connection = {
-      PRIMARY_CONNECTION: this.appConfig.PRIMARY_CONNECTION,
-      BACKUP_CONNECTION: this.appConfig.BACKUP_CONNECTION,
-    };
     while (true) {
-      await this.connexionManager(connections);
+      await this.connexionManager(this.connections);
       await setTimeout(this.getCheckInterval().as("milliseconds"));
     }
   }
