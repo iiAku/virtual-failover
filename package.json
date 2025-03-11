@@ -19,7 +19,7 @@
     "@nestjs/common": "^11.0.10",
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.10",
-    "bun": "^1.2.3",
+    "bun": "^1.2.4",
     "cockatiel": "^3.2.1",
     "luxon": "^3.5.0",
     "nestjs-pino": "^4.3.1",

@@ -3,6 +3,8 @@ import { ConfigModule } from "@nestjs/config";
 import { LoggerModule } from "nestjs-pino";
 import { appConfig } from "./app.config";
 import { ConnectionManagerService } from "./connection-manager.service";
+import { Logger } from "./system/logger/logger.port";
+import { NestPinoLogger } from "./system/logger/nest-pino.logger";
 
 export enum LogLevel {
   Trace = "trace",
@@ -38,6 +40,9 @@ const levelStrings = {
       },
     }),
   ],
-  providers: [ConnectionManagerService],
+  providers: [
+    { provide: Logger, useClass: NestPinoLogger },
+    ConnectionManagerService,
+  ],
 })
 export class AppModule {}
