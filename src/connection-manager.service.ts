@@ -4,12 +4,14 @@ import { ConfigService } from "@nestjs/config";
 import { $ } from "bun";
 import { DateTime, Duration } from "luxon";
 import { AppConfig, MONITORING_URL } from "./app.config";
-import { LogLevel } from "./app.module";
-import { Connection, ConnectionState } from "./connection.type";
+import {
+  Connection,
+  ConnectionState,
+} from "./domain/feature/connection/connection.type";
 import { retryPolicy } from "./retry.policy";
 import { IRetryContext } from "cockatiel";
 import { CustomError, ErrorCode } from "./system/error/custom.error";
-import { Logger } from "./system/logger/logger.port";
+import { Logger } from "./domain/logger.port";
 
 @Injectable()
 export class ConnectionManagerService {

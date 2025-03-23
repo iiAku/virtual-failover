@@ -1,11 +1,20 @@
 export enum LogLevel {
-  Info = "info",
-  Error = "error",
-  Warn = "warn",
-  Debug = "debug",
   Trace = "trace",
+  Debug = "debug",
+  Info = "info",
+  Warn = "warn",
+  Error = "error",
   Fatal = "fatal",
 }
+
+export const levelStrings = {
+  10: LogLevel.Trace,
+  20: LogLevel.Debug,
+  30: LogLevel.Info,
+  40: LogLevel.Warn,
+  50: LogLevel.Error,
+  60: LogLevel.Fatal,
+};
 
 export abstract class Logger {
   abstract [LogLevel.Info](message: string, context?: unknown): void;
