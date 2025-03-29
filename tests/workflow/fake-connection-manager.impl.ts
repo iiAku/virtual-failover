@@ -3,13 +3,21 @@ import {ConnectionType} from "../../src/domain/feature/workflow/workflow.state.m
 import {Logger} from "../../src/domain/logger.port";
 
 export class FakeConnectionManager implements ConnectionManager {
-    private connectionType: ConnectionType = ConnectionType.PRIMARY;
-    public connectionIsHealthy = false;
-
   constructor(private readonly logger: Logger) {}
 
+  public readonly connectionTestMapper: {[key in ConnectionType]: boolean} = {
+      [ConnectionType.PRIMARY]: false,
+      [ConnectionType.BACKUP]: false,
+      [ConnectionType.NONE]: false
+  }
+
+  reset(){
+      this.connectionTestMapper[ConnectionType.PRIMARY] = false;
+      this.connectionTestMapper[ConnectionType.BACKUP] = false;
+  }
+
   isConnectionHealthy(connectionType: ConnectionType): Promise<boolean> {
-    return Promise.resolve(this.connectionIsHealthy);
+    return Promise.resolve(this.connectionTestMapper[connectionType]);
   }
 
   setHigherPriorityTo(connectionType: ConnectionType): Promise<void> {

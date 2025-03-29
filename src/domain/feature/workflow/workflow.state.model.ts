@@ -4,10 +4,12 @@ import { Logger } from "../../logger.port";
 export enum ConnectionType {
   PRIMARY = "PRIMARY",
   BACKUP = "BACKUP",
+  FALLBACK = "FALLBACK",
+  NONE = "NONE",
 }
 
 export class WorkflowState {
-  private currentConnection: ConnectionState = ConnectionState.NONE;
+  private currentConnectionState: ConnectionState = ConnectionState.NONE;
   private readonly state: {
     [key in ConnectionType]: { healthy: boolean; name: string };
   } = {
@@ -16,6 +18,14 @@ export class WorkflowState {
       name: "",
     },
     [ConnectionType.BACKUP]: {
+      healthy: false,
+      name: "",
+    },
+    [ConnectionType.FALLBACK]: {
+      healthy: false,
+      name: "",
+    },
+    [ConnectionState.NONE]: {
       healthy: false,
       name: "",
     },
@@ -28,11 +38,11 @@ export class WorkflowState {
   }
 
   setMainConnection(connectionType: ConnectionType) {
-    this.currentConnection = ConnectionState[connectionType];
+    this.currentConnectionState = ConnectionState[connectionType];
     this.setConnectionIsHealthy(connectionType, true);
   }
 
   getCurrentConnection(): ConnectionState {
-    return this.currentConnection;
+    return this.currentConnectionState;
   }
 }

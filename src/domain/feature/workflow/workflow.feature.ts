@@ -1,16 +1,14 @@
 import { ConnectionManager } from "../connection/connection-manager.port";
 import { ConnectionState } from "../connection/connection.type";
-import {Logger, LogLevel} from "../../logger.port";
+import { Logger, LogLevel } from "../../logger.port";
 import { ConnectionType, WorkflowState } from "./workflow.state.model";
 
 export class Workflow {
-  private readonly state: WorkflowState;
   constructor(
     private readonly connectionManager: ConnectionManager,
+    private readonly state: WorkflowState,
     private readonly logger: Logger,
-  ) {
-    this.state = new WorkflowState(logger);
-  }
+  ) {}
 
   private async setPrimaryHigherPriority() {
     await Promise.all([
@@ -26,10 +24,6 @@ export class Workflow {
       this.connectionManager.setLowerPriorityTo(ConnectionType.PRIMARY),
     ]);
     this.state.setMainConnection(ConnectionType.BACKUP);
-  }
-
-  public getWorkflowState(): WorkflowState {
-    return this.state;
   }
 
   async handler(
@@ -57,7 +51,7 @@ export class Workflow {
       `Backup connection is ${backupIsHealthy ? "up ✅" : "down ❌"}`,
     );
 
-    if (!primaryIsHealthy && !primaryIsHealthy) {
+    if (!primaryIsHealthy && !backupIsHealthy) {
       this.logger.info("Both connections are disabled. Nothing to do. 🙅");
       return;
     }

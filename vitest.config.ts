@@ -5,6 +5,9 @@ export default defineConfig({
     test: {
         globals: true,
         root: './',
+        chaiConfig:{
+            truncateThreshold: 1000
+        }
     },
     plugins: [
         // This is required to build the test files with SWC
