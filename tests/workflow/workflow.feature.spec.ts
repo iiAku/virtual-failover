@@ -5,7 +5,6 @@ import {ConnectionType, WorkflowState} from "../../src/domain/feature/workflow/w
 import {NestPinoLogger} from "../../src/system/logger/nest-pino.logger";
 import {PinoLogger} from "nestjs-pino";
 import {pinoParams} from "../../src/infrastructure/logger/pino.params";
-import {ConnectionState} from "../../src/domain/feature/connection/connection.type";
 import {FakeConnectionManager} from "./fake-connection-manager.impl";
 
 describe('Workflow', () => {
@@ -92,6 +91,4 @@ describe('Workflow', () => {
             expect(state.getCurrentConnection()).toEqual(expectedConnectionState);
         });
     });
-
-    
 });

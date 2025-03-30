@@ -1,5 +1,5 @@
 import { ConnectionManager } from "../connection/connection-manager.port";
-import { ConnectionState } from "../connection/connection.type";
+import { Connection, ConnectionState } from "../connection/connection.type";
 import { Logger, LogLevel } from "../../logger.port";
 import { ConnectionType, WorkflowState } from "./workflow.state.model";
 
@@ -18,11 +18,27 @@ export class Workflow {
     this.state.setMainConnection(ConnectionType.PRIMARY);
   }
 
-  private async setBackupHigherPriority() {
-    await Promise.all([
-      this.connectionManager.setHigherPriorityTo(ConnectionType.BACKUP),
-      this.connectionManager.setLowerPriorityTo(ConnectionType.PRIMARY),
-    ]);
+  private async setBackupHigherPriority(
+      connectionType: ConnectionType,
+  ) {
+    switch (connectionType) {
+      case ConnectionType.BACKUP:
+        this.logger.info("Setting backup connection as higher priority.");
+        await Promise.all([
+          this.connectionManager.setHigherPriorityTo(ConnectionType.BACKUP),
+          this.connectionManager.setLowerPriorityTo(ConnectionType.FALLBACK),
+          this.connectionManager.setLowerPriorityTo(ConnectionType.PRIMARY),
+        ]);
+        break;
+      case ConnectionType.FALLBACK:
+        this.logger.info("Setting fallback connection as higher priority.");
+        await Promise.all([
+          this.connectionManager.setHigherPriorityTo(ConnectionType.FALLBACK),
+          this.connectionManager.setLowerPriorityTo(ConnectionType.BACKUP),
+          this.connectionManager.setLowerPriorityTo(ConnectionType.PRIMARY),
+        ]);
+        break;
+    }
     this.state.setMainConnection(ConnectionType.BACKUP);
   }
 
@@ -38,7 +54,10 @@ export class Workflow {
         ])
       : this.connectionManager.isConnectionHealthy(backup);
 
-    const [primaryIsHealthy, backupIsHealthy] = await Promise.all([
+    const [
+      { healthy: primaryIsHealthy },
+      { healthy: backupIsHealthy, connectionType: backupConnectionType },
+    ] = await Promise.all([
       this.connectionManager.isConnectionHealthy(primary),
       backupPromise,
     ]);
@@ -63,13 +82,13 @@ export class Workflow {
         }
 
         if (!primaryIsHealthy && backupIsHealthy) {
-          await this.setBackupHigherPriority();
+          await this.setBackupHigherPriority(backupConnectionType);
         }
         break;
 
       case ConnectionState.PRIMARY:
         if (!primaryIsHealthy && backupIsHealthy) {
-          await this.setBackupHigherPriority();
+          await this.setBackupHigherPriority(backupConnectionType);
           this.logger.error(
             "Primary connection is down ❌ - Activating backup 🔄",
           );

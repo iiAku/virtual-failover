@@ -42,6 +42,10 @@ export class WorkflowState {
     this.setConnectionIsHealthy(connectionType, true);
   }
 
+  setConnectionName(connectionType: ConnectionType, name: string) {
+    this.state[connectionType].name = name;
+  }
+
   getCurrentConnection(): ConnectionState {
     return this.currentConnectionState;
   }
