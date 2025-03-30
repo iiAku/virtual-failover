@@ -87,8 +87,10 @@ describe('Workflow', () => {
         it.each(scenarios)('$data.description', async ({ data: { primaryStatus, backupStatus, expectedConnectionState } }) => {
             connectionManager.connectionTestMapper[primary] = primaryStatus;
             connectionManager.connectionTestMapper[backup] = backupStatus;
+
             await workflow.handler(primary, backup);
-            expect(state.getCurrentConnection()).toEqual(expectedConnectionState);
+
+            expect(state.getCurrentConnectionState()).toEqual(expectedConnectionState);
         });
     });
 });

@@ -1,5 +1,5 @@
 import { ConnectionManager } from "../connection/connection-manager.port";
-import { Connection, ConnectionState } from "../connection/connection.type";
+import { ConnectionState } from "../connection/connection.type";
 import { Logger, LogLevel } from "../../logger.port";
 import { ConnectionType, WorkflowState } from "./workflow.state.model";
 
@@ -10,36 +10,21 @@ export class Workflow {
     private readonly logger: Logger,
   ) {}
 
-  private async setPrimaryHigherPriority() {
-    await Promise.all([
-      this.connectionManager.setHigherPriorityTo(ConnectionType.PRIMARY),
-      this.connectionManager.setLowerPriorityTo(ConnectionType.BACKUP),
-    ]);
-    this.state.setMainConnection(ConnectionType.PRIMARY);
-  }
-
-  private async setBackupHigherPriority(
-      connectionType: ConnectionType,
+  private async setConnectionPriority(
+    connectionType: ConnectionType | ConnectionType[],
   ) {
-    switch (connectionType) {
-      case ConnectionType.BACKUP:
-        this.logger.info("Setting backup connection as higher priority.");
-        await Promise.all([
-          this.connectionManager.setHigherPriorityTo(ConnectionType.BACKUP),
-          this.connectionManager.setLowerPriorityTo(ConnectionType.FALLBACK),
-          this.connectionManager.setLowerPriorityTo(ConnectionType.PRIMARY),
-        ]);
-        break;
-      case ConnectionType.FALLBACK:
-        this.logger.info("Setting fallback connection as higher priority.");
-        await Promise.all([
-          this.connectionManager.setHigherPriorityTo(ConnectionType.FALLBACK),
-          this.connectionManager.setLowerPriorityTo(ConnectionType.BACKUP),
-          this.connectionManager.setLowerPriorityTo(ConnectionType.PRIMARY),
-        ]);
-        break;
-    }
-    this.state.setMainConnection(ConnectionType.BACKUP);
+    const connectionTypeArray = Array.isArray(connectionType)
+      ? connectionType
+      : [connectionType];
+    await Promise.all(
+      connectionTypeArray.map((type, index) =>
+        this.connectionManager.setPriority({
+          priority: index,
+          connectionType: type,
+        }),
+      ),
+    );
+    this.state.setMainConnection(connectionTypeArray[0]);
   }
 
   async handler(
@@ -75,20 +60,20 @@ export class Workflow {
       return;
     }
 
-    switch (this.state.getCurrentConnection()) {
+    switch (this.state.getCurrentConnectionState()) {
       case ConnectionState.NONE:
         if (primaryIsHealthy) {
-          await this.setPrimaryHigherPriority();
+          await this.setConnectionPriority([primary, backupConnectionType]);
         }
 
         if (!primaryIsHealthy && backupIsHealthy) {
-          await this.setBackupHigherPriority(backupConnectionType);
+          await this.setConnectionPriority([backupConnectionType, primary]);
         }
         break;
 
       case ConnectionState.PRIMARY:
         if (!primaryIsHealthy && backupIsHealthy) {
-          await this.setBackupHigherPriority(backupConnectionType);
+          await this.setConnectionPriority([backupConnectionType, primary]);
           this.logger.error(
             "Primary connection is down ❌ - Activating backup 🔄",
           );
@@ -97,7 +82,7 @@ export class Workflow {
 
       case ConnectionState.BACKUP:
         if (primaryIsHealthy) {
-          await this.setPrimaryHigherPriority();
+          await this.setConnectionPriority([primary, backupConnectionType]);
           this.logger.info(
             "Primary connection is back up ✅ - Switching back to primary.",
           );

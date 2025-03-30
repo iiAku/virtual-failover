@@ -10,6 +10,7 @@ export enum ConnectionType {
 
 export class WorkflowState {
   private currentConnectionState: ConnectionState = ConnectionState.NONE;
+
   private readonly state: {
     [key in ConnectionType]: { healthy: boolean; name: string };
   } = {
@@ -41,12 +42,12 @@ export class WorkflowState {
     this.currentConnectionState = ConnectionState[connectionType];
     this.setConnectionIsHealthy(connectionType, true);
   }
-
-  setConnectionName(connectionType: ConnectionType, name: string) {
-    this.state[connectionType].name = name;
+    
+  getConnectionTypeState(connectionType: ConnectionType){
+    return this.state[connectionType];
   }
 
-  getCurrentConnection(): ConnectionState {
+  getCurrentConnectionState(): ConnectionState {
     return this.currentConnectionState;
   }
 }
