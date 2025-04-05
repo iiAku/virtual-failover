@@ -1,9 +1,9 @@
+import { Logger, LogLevel } from "src/domain/logger.port";
 import {
   ConnectionHealthyResult,
   ConnectionManager,
 } from "../connection/connection-manager.port";
 import { ConnectionState } from "../connection/connection.type";
-import { Logger, LogLevel } from "../../logger.port";
 import { ConnectionType, WorkflowState } from "./workflow.state.model";
 import { sortedConnectionCheck } from "./sort.helper";
 
@@ -42,6 +42,118 @@ export class Workflow {
     );
   }
 
+  private async noneStrategy([
+    primaryCheckResult,
+    backupCheckResult,
+    fallbackCheckResult,
+  ]: ConnectionHealthyResult[]) {
+    if (primaryCheckResult.healthy) {
+      await this.setConnectionPriority([
+        primaryCheckResult,
+        backupCheckResult,
+        fallbackCheckResult,
+      ]);
+    }
+
+    if (
+      !primaryCheckResult.healthy &&
+      (backupCheckResult.healthy || fallbackCheckResult?.healthy)
+    ) {
+      await this.setConnectionPriority([
+        backupCheckResult,
+        fallbackCheckResult,
+        primaryCheckResult,
+      ]);
+    }
+  }
+
+  private async primaryStrategy([
+    primaryCheckResult,
+    backupCheckResult,
+    fallbackCheckResult,
+  ]: ConnectionHealthyResult[]) {
+    if (
+      !primaryCheckResult.healthy &&
+      (backupCheckResult.healthy || fallbackCheckResult?.healthy)
+    ) {
+      await this.setConnectionPriority([
+        backupCheckResult,
+        fallbackCheckResult,
+        primaryCheckResult,
+      ]);
+      this.logger.error(
+        "Primary connection is down ❌ - Activating backup/fallback 🔄",
+      );
+    }
+  }
+
+  private async backupStrategy([
+    primaryCheckResult,
+    backupCheckResult,
+    fallbackCheckResult,
+  ]: ConnectionHealthyResult[]) {
+    if (primaryCheckResult.healthy) {
+      await this.setConnectionPriority([
+        primaryCheckResult,
+        backupCheckResult,
+        fallbackCheckResult,
+      ]);
+      this.logger.info(
+        "Primary connection is back up ✅ - Switching back to primary.",
+      );
+      return;
+    }
+
+    if (!backupCheckResult.healthy && fallbackCheckResult?.healthy) {
+      await this.setConnectionPriority([
+        fallbackCheckResult,
+        backupCheckResult,
+        primaryCheckResult,
+      ]);
+      this.logger.error(
+        "Backup connection is down ❌ - Activating fallback 🔄",
+      );
+      return;
+    }
+
+    this.logger.info(
+      "Primary connection is still down ❌ - Backup/fallback is already active, keeping it up.",
+    );
+  }
+
+  private async fallbackStrategy([
+    primaryCheckResult,
+    backupCheckResult,
+    fallbackCheckResult,
+  ]: ConnectionHealthyResult[]) {
+    if (primaryCheckResult.healthy) {
+      await this.setConnectionPriority([
+        primaryCheckResult,
+        backupCheckResult,
+        fallbackCheckResult,
+      ]);
+      this.logger.info(
+        "Primary connection is back up ✅ - Switching back to primary.",
+      );
+      return;
+    }
+
+    if (!fallbackCheckResult?.healthy && backupCheckResult.healthy) {
+      await this.setConnectionPriority([
+        backupCheckResult,
+        primaryCheckResult,
+        fallbackCheckResult,
+      ]);
+      this.logger.error(
+        "Fallback connection is down ❌ - Activating backup 🔄",
+      );
+      return;
+    }
+    this.logger.info(
+      "Primary connection is still down ❌ - fallback is already active, keeping it up.",
+    );
+  }
+
   async handler(
     primary: ConnectionType,
     backup: ConnectionType,
@@ -70,93 +182,15 @@ export class Workflow {
       return;
     }
 
-    const [primaryCheckResult, backupCheckResult, fallbackCheckResult] =
-      connectionChecks;
-
     switch (this.state.getCurrentConnectionState()) {
       case ConnectionState.NONE:
-        if (primaryCheckResult.healthy) {
-          await this.setConnectionPriority(connectionChecks);
-        }
-
-        if (
-          !primaryCheckResult.healthy &&
-          (backupCheckResult.healthy || fallbackCheckResult?.healthy)
-        ) {
-          await this.setConnectionPriority([
-            backupCheckResult,
-            fallbackCheckResult,
-            primaryCheckResult,
-          ]);
-        }
-        break;
-
+        return this.noneStrategy(connectionChecks);
       case ConnectionState.PRIMARY:
-        if (
-          !primaryCheckResult.healthy &&
-          (backupCheckResult.healthy || fallbackCheckResult?.healthy)
-        ) {
-          await this.setConnectionPriority([
-            backupCheckResult,
-            fallbackCheckResult,
-            primaryCheckResult,
-          ]);
-          this.logger.error(
-            "Primary connection is down ❌ - Activating backup/fallback 🔄",
-          );
-        }
-        break;
-
-      case ConnectionState.FALLBACK:
-        if (primaryCheckResult.healthy) {
-          await this.setConnectionPriority(connectionChecks);
-          this.logger.info(
-            "Primary connection is back up ✅ - Switching back to primary.",
-          );
-          break;
-        }
-
-        if (!fallbackCheckResult?.healthy && backupCheckResult.healthy) {
-          await this.setConnectionPriority([
-            backupCheckResult,
-            primaryCheckResult,
-            fallbackCheckResult,
-          ]);
-          this.logger.error(
-            "Fallback connection is down ❌ - Activating backup 🔄",
-          );
-          break;
-        }
-        this.logger.info(
-          "Primary connection is still down ❌ - fallback is already active, keeping it up.",
-        );
-        break;
-
+        return this.primaryStrategy(connectionChecks);
       case ConnectionState.BACKUP:
-        if (primaryCheckResult.healthy) {
-          await this.setConnectionPriority(connectionChecks);
-          this.logger.info(
-            "Primary connection is back up ✅ - Switching back to primary.",
-          );
-          break;
-        }
-
-        if (!backupCheckResult.healthy && fallbackCheckResult?.healthy) {
-          await this.setConnectionPriority([
-            fallbackCheckResult,
-            backupCheckResult,
-            primaryCheckResult,
-          ]);
-          this.logger.error(
-            "Backup connection is down ❌ - Activating fallback 🔄",
-          );
-          break;
-        }
-
-        this.logger.info(
-          "Primary connection is still down ❌ - Backup/fallback is already active, keeping it up.",
-        );
-        break;
+        return this.backupStrategy(connectionChecks);
+      case ConnectionState.FALLBACK:
+        return this.fallbackStrategy(connectionChecks);
     }
   }
 }
