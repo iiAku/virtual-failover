@@ -1,7 +1,8 @@
 import {ConnectionHealthyResult, ConnectionManager, ConnectionPriority} from "../../src/domain/feature/connection/connection-manager.port";
 import {ConnectionType} from "../../src/domain/feature/workflow/workflow.state.model";
 import {Logger} from "../../src/domain/logger.port";
-import {undefined} from "zod";
+import {undefined, util} from "zod";
+import Omit = util.Omit;
 
 export class FakeConnectionManager implements ConnectionManager {
   constructor(private readonly logger: Logger) {}
@@ -28,4 +29,8 @@ export class FakeConnectionManager implements ConnectionManager {
       this.logger.info(`Setting priority to connection ${connectionPriority.connectionType} with priority ${connectionPriority.priority}`);
       return Promise.resolve();
   }
+
+    reconnect(connectionType: ConnectionType): Promise<void> {
+        return Promise.resolve();
+    }
 }

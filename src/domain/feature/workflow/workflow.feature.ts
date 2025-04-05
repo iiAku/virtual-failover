@@ -37,9 +37,10 @@ export class Workflow {
         }),
       ),
     );
-    this.state.setMainConnection(
-      sortedConnectionHealthyResults[0].connectionType,
-    );
+
+    const eligibleConnection = sortedConnectionHealthyResults[0].connectionType
+    await this.connectionManager.reconnect(eligibleConnection)
+    this.state.setMainConnection(eligibleConnection);
   }
 
   private async noneStrategy([

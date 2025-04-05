@@ -12,23 +12,19 @@ export class WorkflowState {
   private currentConnectionState: ConnectionState = ConnectionState.NONE;
 
   private readonly state: {
-    [key in ConnectionType]: { healthy: boolean; name: string };
+    [key in ConnectionType]: { healthy: boolean; };
   } = {
     [ConnectionType.PRIMARY]: {
       healthy: false,
-      name: "",
     },
     [ConnectionType.BACKUP]: {
       healthy: false,
-      name: "",
     },
     [ConnectionType.FALLBACK]: {
       healthy: false,
-      name: "",
     },
     [ConnectionState.NONE]: {
       healthy: false,
-      name: "",
     },
   };
 
@@ -41,10 +37,6 @@ export class WorkflowState {
   setMainConnection(connectionType: ConnectionType) {
     this.currentConnectionState = ConnectionState[connectionType];
     this.setConnectionIsHealthy(connectionType, true);
-  }
-
-  getConnectionTypeState(connectionType: ConnectionType) {
-    return this.state[connectionType];
   }
 
   getCurrentConnectionState(): ConnectionState {

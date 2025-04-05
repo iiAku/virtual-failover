@@ -16,4 +16,5 @@ export abstract class ConnectionManager {
     connectionType: ConnectionType,
   ): Promise<ConnectionHealthyResult>;
   abstract setPriority(connectionPriority: ConnectionPriority): Promise<void>;
+  abstract reconnect(connectionType: ConnectionType): Promise<void>;
 }
