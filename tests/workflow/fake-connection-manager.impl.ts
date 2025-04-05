@@ -6,22 +6,22 @@ import {undefined} from "zod";
 export class FakeConnectionManager implements ConnectionManager {
   constructor(private readonly logger: Logger) {}
 
-  public readonly connectionTestMapper: {[key in ConnectionType]: boolean} = {
-      [ConnectionType.PRIMARY]: false,
-      [ConnectionType.BACKUP]: false,
-      [ConnectionType.NONE]: false,
-      [ConnectionType.FALLBACK]: false
+  public readonly connectionTestMapper: {[key in ConnectionType]: Omit<ConnectionHealthyResult, "connectionType">} = {
+      [ConnectionType.PRIMARY]: {healthy: false, checkResolvedInMilisseconds: 0},
+      [ConnectionType.BACKUP]: {healthy: false, checkResolvedInMilisseconds: 0},
+      [ConnectionType.NONE]: {healthy: false, checkResolvedInMilisseconds: 0},
+      [ConnectionType.FALLBACK]: {healthy: false, checkResolvedInMilisseconds: 0}
   }
 
   reset(){
-      this.connectionTestMapper[ConnectionType.PRIMARY] = false;
-      this.connectionTestMapper[ConnectionType.BACKUP] = false;
-      this.connectionTestMapper[ConnectionType.NONE] = false;
-      this.connectionTestMapper[ConnectionType.FALLBACK] = false;
+      this.connectionTestMapper[ConnectionType.PRIMARY] = {healthy: false, checkResolvedInMilisseconds: 0};
+      this.connectionTestMapper[ConnectionType.BACKUP] = {healthy: false, checkResolvedInMilisseconds: 0};
+      this.connectionTestMapper[ConnectionType.NONE] = {healthy: false, checkResolvedInMilisseconds: 0};
+      this.connectionTestMapper[ConnectionType.FALLBACK] = {healthy: false, checkResolvedInMilisseconds: 0};
   }
 
   isConnectionHealthy(connectionType: ConnectionType): Promise<ConnectionHealthyResult> {
-    return Promise.resolve({healthy: this.connectionTestMapper[connectionType], connectionType});
+    return Promise.resolve({healthy: this.connectionTestMapper[connectionType].healthy, connectionType, checkResolvedInMilisseconds: this.connectionTestMapper[connectionType].checkResolvedInMilisseconds});
   }
 
   setPriority(connectionPriority: ConnectionPriority): Promise<void> {

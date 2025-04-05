@@ -3,6 +3,7 @@ import { ConnectionType } from "../workflow/workflow.state.model";
 export type ConnectionHealthyResult = {
   connectionType: ConnectionType;
   healthy: boolean;
+  checkResolvedInMilisseconds: number;
 };
 
 export type ConnectionPriority = {

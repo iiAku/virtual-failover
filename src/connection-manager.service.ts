@@ -341,6 +341,7 @@ export class ConnectionManagerService {
           );
           break;
         }
+
         this.logger.info(
           "Primary connection is still down ❌ - Backup is already active, keeping it up.",
         );

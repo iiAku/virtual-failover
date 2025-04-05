@@ -42,8 +42,8 @@ export class WorkflowState {
     this.currentConnectionState = ConnectionState[connectionType];
     this.setConnectionIsHealthy(connectionType, true);
   }
-    
-  getConnectionTypeState(connectionType: ConnectionType){
+
+  getConnectionTypeState(connectionType: ConnectionType) {
     return this.state[connectionType];
   }
 
