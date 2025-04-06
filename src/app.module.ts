@@ -1,5 +1,5 @@
 import { Module } from "@nestjs/common";
-import { ConfigModule } from "@nestjs/config";
+import { ConfigModule, ConfigService } from "@nestjs/config";
 import { LoggerModule } from "nestjs-pino";
 import { appConfig } from "./app.config";
 import { levelStrings, Logger } from "./domain/logger.port";
@@ -8,6 +8,7 @@ import { ConnectionManager } from "./domain/feature/connection/connection-manage
 import { NmcliConnectionManager } from "./infrastructure/connection/nmcli-connection-manager.impl";
 import { Workflow } from "./domain/feature/workflow/workflow.feature";
 import { pinoParams } from "./infrastructure/logger/pino.params";
+import { WorkflowState } from "./domain/feature/workflow/workflow.state.model";
 
 @Module({
   imports: [
@@ -21,14 +22,18 @@ import { pinoParams } from "./infrastructure/logger/pino.params";
     { provide: Logger, useClass: NestPinoLogger },
     {
       provide: ConnectionManager,
-      useFactory: (logger: Logger) => new NmcliConnectionManager(logger),
-      inject: [Logger],
+      useFactory: (logger: Logger, config) => new NmcliConnectionManager(logger, config),
+      inject: [Logger, ConfigService],
     },
+    WorkflowState,
     {
       provide: Workflow,
-      useFactory: (connectionManager: ConnectionManager, logger: Logger) =>
-        new Workflow(connectionManager, logger),
-      inject: [ConnectionManager, Logger],
+      useFactory: (
+        connectionManager: ConnectionManager,
+        workflowState: WorkflowState,
+        logger: Logger,
+      ) => new Workflow(connectionManager, workflowState, logger),
+      inject: [ConnectionManager, WorkflowState, Logger],
     },
   ],
 })

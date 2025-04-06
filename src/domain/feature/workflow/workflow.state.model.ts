@@ -1,5 +1,4 @@
 import { ConnectionState } from "../connection/connection.type";
-import { Logger } from "../../logger.port";
 
 export enum ConnectionType {
   PRIMARY = "PRIMARY",
@@ -12,7 +11,7 @@ export class WorkflowState {
   private currentConnectionState: ConnectionState = ConnectionState.NONE;
 
   private readonly state: {
-    [key in ConnectionType]: { healthy: boolean; };
+    [key in ConnectionType]: { healthy: boolean };
   } = {
     [ConnectionType.PRIMARY]: {
       healthy: false,
@@ -23,12 +22,10 @@ export class WorkflowState {
     [ConnectionType.FALLBACK]: {
       healthy: false,
     },
-    [ConnectionState.NONE]: {
+    [ConnectionType.NONE]: {
       healthy: false,
     },
   };
-
-  constructor(private readonly logger: Logger) {}
 
   setConnectionIsHealthy(connectionType: ConnectionType, isHealthy: boolean) {
     this.state[connectionType].healthy = isHealthy;

@@ -9,7 +9,8 @@ import { ConfigService } from "@nestjs/config";
 import { AppConfig, MONITORING_URL } from "../../app.config";
 import { IRetryContext } from "cockatiel";
 import { $ } from "bun";
-import { retryPolicy } from "../../retry.policy";
+import { retryPolicy } from "../../system/resiliency/retry.policy";
+import { toMetric } from "./metric.mapper";
 
 export class NmcliConnectionManager implements ConnectionManager {
   private readonly appConfig: AppConfig;
@@ -23,6 +24,7 @@ export class NmcliConnectionManager implements ConnectionManager {
     config: ConfigService,
   ) {
     this.appConfig = config.get<AppConfig>("_PROCESS_ENV_VALIDATED");
+    console.log({conf: this.appConfig})
     this.connectionMapper = {
       [ConnectionType.PRIMARY]: { name: this.appConfig.PRIMARY_CONNECTION },
       [ConnectionType.BACKUP]: { name: this.appConfig.BACKUP_CONNECTION },
@@ -102,10 +104,15 @@ export class NmcliConnectionManager implements ConnectionManager {
     }
   }
 
-  async setPriority({ connectionType }: ConnectionPriority): Promise<void> {
+  async setPriority({
+    connectionType,
+    priority,
+  }: ConnectionPriority): Promise<void> {
     const interfaceName = this.connectionMapper[connectionType]?.name;
-    const routeMetrics = 100;
-    const autoconnectPriority = 100;
+    const metric = toMetric(priority);
+    const routeMetrics = metric;
+    const autoconnectPriority = metric;
+
     const deviceUUID = await this.getUUID(interfaceName);
 
     const updateLinkPriority =
@@ -141,6 +148,10 @@ export class NmcliConnectionManager implements ConnectionManager {
   async reconnect(connectionType: ConnectionType) {
     const start = performance.now();
     const interfaceName = this.connectionMapper[connectionType]?.name;
+    if(!interfaceName) {
+        this.logger.error(`Connection type ${connectionType} not found`);
+        return;
+    }
     await this.reloadNmcli(interfaceName);
     const end = performance.now();
     const diff = Math.round(end - start);

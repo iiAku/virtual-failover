@@ -14,7 +14,7 @@ async function bootstrap() {
   const everyFiveSeconds = Duration.fromObject({ seconds: 5 });
 
   while (true) {
-    await workflow.handler(ConnectionType.PRIMARY, ConnectionType.BACKUP);
+    await workflow.handler(ConnectionType.PRIMARY, ConnectionType.BACKUP, ConnectionType.FALLBACK);
     await setTimeout(everyFiveSeconds.as("milliseconds"));
   }
 }

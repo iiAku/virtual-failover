@@ -25,9 +25,12 @@ export class Workflow {
 
     const sortedConnectionHealthyResults = sortedConnectionCheck(
       connectionHealthyResults,
-    ).filter(
-      (connectionHealthyResult) => connectionHealthyResult?.healthy === true,
-    );
+    ).filter(Boolean);
+
+    if (sortedConnectionHealthyResults.length === 0) {
+      this.logger.info("No healthy connections available.");
+      return;
+    }
 
     await Promise.all(
       sortedConnectionHealthyResults.map((connectionHealthyResult, priority) =>
@@ -38,8 +41,12 @@ export class Workflow {
       ),
     );
 
-    const eligibleConnection = sortedConnectionHealthyResults[0].connectionType
-    await this.connectionManager.reconnect(eligibleConnection)
+    const eligibleConnection = sortedConnectionHealthyResults.filter(
+      (connectionHealthyResult) => connectionHealthyResult?.healthy === true,
+    )[0].connectionType;
+
+    await this.connectionManager.reconnect(eligibleConnection);
+
     this.state.setMainConnection(eligibleConnection);
   }
 
