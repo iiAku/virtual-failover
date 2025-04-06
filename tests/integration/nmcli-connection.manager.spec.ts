@@ -15,13 +15,19 @@ describe('Connection Manager', () => {
         connectionManager = moduleRef.get(ConnectionManager);
     })
 
-    it('Should be able to test the connectivity using curl of a given link against a random url', async () => {
-        const testedConnection = ConnectionType.PRIMARY
+    it.each([ConnectionType.PRIMARY, ConnectionType.BACKUP])('Should be able to test the connectivity using curl of a given link against a random url %s', async (testedConnection) => {
         const result = await connectionManager.isConnectionHealthy(testedConnection);
+
 
         expect(result).toBeDefined();
         expect(result.healthy).toBe(true);
-        expect(result.connectionType).toBe(ConnectionType.PRIMARY)
+        expect(result.connectionType).toBe(testedConnection);
         expect(result.checkResolvedInMilisseconds).toBeGreaterThan(0)
     })
+
+    it.each([ConnectionType.PRIMARY, ConnectionType.BACKUP])('Should reconnect to the given connection: %s', async (testedConnection) => {
+        const result = await connectionManager.reconnect(testedConnection);
+
+        expect(result).toBeUndefined();
+    });
 })

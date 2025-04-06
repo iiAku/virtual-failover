@@ -9,14 +9,22 @@ import { ConfigService } from "@nestjs/config";
 import { AppConfig, MONITORING_URL } from "../../app.config";
 import { IRetryContext } from "cockatiel";
 import { $ } from "bun";
-import { retryPolicy } from "../../system/resiliency/retry.policy";
-import { toMetric } from "./metric.mapper";
+import {
+  retryPolicy,
+} from "../../system/resiliency/retry.policy";
+import { CustomError, ErrorCode } from "../../system/error/custom.error";
+import { z } from "zod";
+import {toMetric} from "./metric.mapper";
 
 export class NmcliConnectionManager implements ConnectionManager {
   private readonly appConfig: AppConfig;
   private readonly monitoringUrl: string[] = MONITORING_URL;
   private readonly connectionMapper: {
-    [key in ConnectionType]?: { name: string };
+    [key in ConnectionType]?: {
+      type: ConnectionType;
+      interfaceName: string;
+      fullName: string;
+    };
   };
 
   constructor(
@@ -24,11 +32,29 @@ export class NmcliConnectionManager implements ConnectionManager {
     config: ConfigService,
   ) {
     this.appConfig = config.get<AppConfig>("_PROCESS_ENV_VALIDATED");
-    console.log({conf: this.appConfig})
+    console.log({ conf: this.appConfig });
     this.connectionMapper = {
-      [ConnectionType.PRIMARY]: { name: this.appConfig.PRIMARY_CONNECTION },
-      [ConnectionType.BACKUP]: { name: this.appConfig.BACKUP_CONNECTION },
-      [ConnectionType.FALLBACK]: { name: this.appConfig.FALLBACK_CONNECTION },
+      [ConnectionType.PRIMARY]: {
+        type: ConnectionType.PRIMARY,
+        interfaceName: this.appConfig.PRIMARY_CONNECTION,
+        get fullName() {
+          return `${this.type} (${this.interfaceName})`;
+        },
+      },
+      [ConnectionType.BACKUP]: {
+        type: ConnectionType.BACKUP,
+        interfaceName: this.appConfig.BACKUP_CONNECTION,
+        get fullName() {
+          return `${this.type} (${this.interfaceName})`;
+        },
+      },
+      [ConnectionType.FALLBACK]: {
+        type: ConnectionType.FALLBACK,
+        interfaceName: this.appConfig.FALLBACK_CONNECTION,
+        get fullName() {
+          return `${this.type} (${this.interfaceName})`;
+        },
+      },
     };
   }
 
@@ -38,24 +64,65 @@ export class NmcliConnectionManager implements ConnectionManager {
     ];
   }
 
-  private async checkConnectivity(interfaceName: string, ctx: IRetryContext) {
+  private getInterface(connectionType: ConnectionType) {
+    const interfaceName = this.connectionMapper[connectionType];
+    if (!interfaceName) {
+      this.logger.error(`Connection type ${connectionType} not found`);
+      throw new CustomError(ErrorCode.UNKNOWN_CONNECTION_LINK, {
+        connectionType,
+        interfaceName,
+      });
+    }
+    return interfaceName;
+  }
+
+  private async checkConnectivity(
+    connectionType: ConnectionType,
+    interfaceName: string,
+    ctx: IRetryContext,
+  ) {
     const monitoringUrl = this.getRandomUrl();
     this.logger.info("Checking connectivity against", {
       attempt: ctx.attempt,
+      connectionType,
       interfaceName,
       monitoringUrl,
     });
-    return $`curl --interface ${interfaceName} -sI --max-time 1 --connect-timeout 1 ${monitoringUrl}`.quiet();
+    return $`curl --interface ${interfaceName} -sI --max-time 1 --connect-timeout 1 ${monitoringUrl}`
+      .quiet()
+      .nothrow();
+  }
+
+  private async getUUID(connectionName: string) {
+    const result =
+      await $`nmcli -t -f UUID,DEVICE connection show --active | grep "${connectionName}" | cut -d: -f1`.quiet();
+    const resultAsText = result.text().trim();
+    const isValid = z.string().uuid().safeParse(resultAsText);
+    if (!isValid.success) {
+      this.logger.error(`Failed to get UUID for connection ${connectionName}`, {
+        result,
+      });
+      const stdoutToString = result.stdout.toString();
+      const stderrToString = result.stderr.toString();
+      throw new CustomError(ErrorCode.UNABLE_TO_GET_IFACE_UUID, {
+        connectionName,
+        stdout: stdoutToString,
+        stderr: stderrToString,
+      });
+    }
+    return isValid.data;
   }
 
   async isConnectionHealthy(
     connectionType: ConnectionType,
   ): Promise<ConnectionHealthyResult> {
     const now = performance.now();
-    const interfaceName = this.connectionMapper[connectionType]?.name;
+
+    const { interfaceName } = this.getInterface(connectionType);
     const check = await retryPolicy.execute((ctx) =>
-      this.checkConnectivity(interfaceName, ctx),
+      this.checkConnectivity(connectionType, interfaceName, ctx),
     );
+
     const end = performance.now();
 
     return {
@@ -63,12 +130,6 @@ export class NmcliConnectionManager implements ConnectionManager {
       connectionType,
       checkResolvedInMilisseconds: end - now,
     };
-  }
-
-  private async getUUID(connectionName: string) {
-    const result =
-      await $`nmcli -t -f UUID,DEVICE connection show --active | grep "${connectionName}" | cut -d: -f1`.quiet();
-    return result.text().trim();
   }
 
   private async reloadNmcli(connectionName: string) {
@@ -108,7 +169,7 @@ export class NmcliConnectionManager implements ConnectionManager {
     connectionType,
     priority,
   }: ConnectionPriority): Promise<void> {
-    const interfaceName = this.connectionMapper[connectionType]?.name;
+    const {interfaceName, fullName} = this.connectionMapper[connectionType];
     const metric = toMetric(priority);
     const routeMetrics = metric;
     const autoconnectPriority = metric;
@@ -130,33 +191,38 @@ export class NmcliConnectionManager implements ConnectionManager {
       ])
     ).map((promise) => promise.status === "fulfilled");
 
-    this.logger.info(`Setting route priority for connection ${interfaceName}`);
+    this.logger.info(
+      `Setting route priority for connection  ${connectionType} ${interfaceName}`,
+    );
 
     this.logger[metricParam ? LogLevel.Info : LogLevel.Warn](
-      `Connection (${interfaceName}) ipv4.route-metric=${routeMetrics} ${metricParam ? "✅" : "❌"}`,
+      `Connection ${fullName} ipv4.route-metric=${routeMetrics} ${metricParam ? "✅" : "❌"}`,
     );
 
     this.logger[metricParamV6 ? LogLevel.Info : LogLevel.Warn](
-      `Connection (${interfaceName}) ipv6.route-metric=${routeMetrics} ${metricParamV6 ? "✅" : "❌"}`,
+      `Connection ${fullName} ipv6.route-metric=${routeMetrics} ${metricParamV6 ? "✅" : "❌"}`,
     );
 
     this.logger[autoconnect ? LogLevel.Info : LogLevel.Warn](
-      `Connection (${interfaceName}) connection.autoconnect-priority=${autoconnectPriority} ${autoconnect ? "✅" : "❌"}`,
+      `Connection ${fullName} connection.autoconnect-priority=${autoconnectPriority} ${autoconnect ? "✅" : "❌"}`,
     );
+    await this.reconnect(connectionType);
   }
 
   async reconnect(connectionType: ConnectionType) {
     const start = performance.now();
-    const interfaceName = this.connectionMapper[connectionType]?.name;
-    if(!interfaceName) {
-        this.logger.error(`Connection type ${connectionType} not found`);
-        return;
-    }
+    const { interfaceName, fullName } = this.getInterface(connectionType);
+
+    //See what is the best option reconnect / vs up/down
     await this.reloadNmcli(interfaceName);
+    //const deviceUUID = await this.getUUID(interfaceName);
+    //await $`nmcli connection down uuid ${deviceUUID}`;
+    //await $`nmcli connection up uuid ${deviceUUID}`;
+
+    this.logger.info(`Connection ${fullName} reconnected successfully`);
+
     const end = performance.now();
     const diff = Math.round(end - start);
-    this.logger.info(
-      `Connection (${interfaceName}) took ${diff}ms to restart.`,
-    );
+    this.logger.info(`Connection ${fullName}) took ${diff}ms to restart.`);
   }
 }

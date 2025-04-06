@@ -2,7 +2,7 @@ import { Module } from "@nestjs/common";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 import { LoggerModule } from "nestjs-pino";
 import { appConfig } from "./app.config";
-import { levelStrings, Logger } from "./domain/logger.port";
+import { Logger } from "./domain/logger.port";
 import { NestPinoLogger } from "./system/logger/nest-pino.logger";
 import { ConnectionManager } from "./domain/feature/connection/connection-manager.port";
 import { NmcliConnectionManager } from "./infrastructure/connection/nmcli-connection-manager.impl";

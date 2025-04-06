@@ -45,8 +45,6 @@ export class Workflow {
       (connectionHealthyResult) => connectionHealthyResult?.healthy === true,
     )[0].connectionType;
 
-    await this.connectionManager.reconnect(eligibleConnection);
-
     this.state.setMainConnection(eligibleConnection);
   }
 

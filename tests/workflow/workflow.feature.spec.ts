@@ -37,7 +37,7 @@ describe('Workflow', () => {
         const pinoLogger = new PinoLogger(pinoParams);
         logger = new NestPinoLogger(pinoLogger);
         connectionManager = new FakeConnectionManager(logger);
-        state = new WorkflowState(logger);
+        state = new WorkflowState();
         workflow = new Workflow(connectionManager, state, logger);
     });
 
