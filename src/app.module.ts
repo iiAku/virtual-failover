@@ -22,7 +22,8 @@ import { WorkflowState } from "./domain/feature/workflow/workflow.state.model";
     { provide: Logger, useClass: NestPinoLogger },
     {
       provide: ConnectionManager,
-      useFactory: (logger: Logger, config) => new NmcliConnectionManager(logger, config),
+      useFactory: (logger: Logger, config) =>
+        new NmcliConnectionManager(logger, config),
       inject: [Logger, ConfigService],
     },
     WorkflowState,

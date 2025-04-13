@@ -4,17 +4,15 @@ import {
   ConnectionPriority,
 } from "../../domain/feature/connection/connection-manager.port";
 import { ConnectionType } from "../../domain/feature/workflow/workflow.state.model";
-import { Logger, LogLevel } from "../../domain/logger.port";
+import { Logger } from "../../domain/logger.port";
 import { ConfigService } from "@nestjs/config";
 import { AppConfig, MONITORING_URL } from "../../app.config";
 import { IRetryContext } from "cockatiel";
 import { $ } from "bun";
-import {
-  retryPolicy,
-} from "../../system/resiliency/retry.policy";
+import { retryPolicy } from "../../system/resiliency/retry.policy";
 import { CustomError, ErrorCode } from "../../system/error/custom.error";
 import { z } from "zod";
-import {toMetric} from "./metric.mapper";
+import { route, RouteInfo, RouteRoutingTables } from "iproute";
 
 export class NmcliConnectionManager implements ConnectionManager {
   private readonly appConfig: AppConfig;
@@ -23,6 +21,7 @@ export class NmcliConnectionManager implements ConnectionManager {
     [key in ConnectionType]?: {
       type: ConnectionType;
       interfaceName: string;
+      hasDisabledDhcpRouteRule: boolean;
       fullName: string;
     };
   };
@@ -37,6 +36,7 @@ export class NmcliConnectionManager implements ConnectionManager {
       [ConnectionType.PRIMARY]: {
         type: ConnectionType.PRIMARY,
         interfaceName: this.appConfig.PRIMARY_CONNECTION,
+        hasDisabledDhcpRouteRule: false,
         get fullName() {
           return `${this.type} (${this.interfaceName})`;
         },
@@ -44,6 +44,7 @@ export class NmcliConnectionManager implements ConnectionManager {
       [ConnectionType.BACKUP]: {
         type: ConnectionType.BACKUP,
         interfaceName: this.appConfig.BACKUP_CONNECTION,
+        hasDisabledDhcpRouteRule: false,
         get fullName() {
           return `${this.type} (${this.interfaceName})`;
         },
@@ -51,6 +52,7 @@ export class NmcliConnectionManager implements ConnectionManager {
       [ConnectionType.FALLBACK]: {
         type: ConnectionType.FALLBACK,
         interfaceName: this.appConfig.FALLBACK_CONNECTION,
+        hasDisabledDhcpRouteRule: false,
         get fullName() {
           return `${this.type} (${this.interfaceName})`;
         },
@@ -132,36 +134,16 @@ export class NmcliConnectionManager implements ConnectionManager {
     };
   }
 
-  private async reloadNmcli(connectionName: string) {
-    try {
-      await $`nmcli device disconnect ${connectionName}`.quiet();
-      await $`nmcli device connect ${connectionName}`.quiet();
-    } catch (e) {
-      //This is fine even if we fail to reconnect interfaces, routing (prios through metrics) should be reflected
-      this.logger.error(`Failed to reconnect ${connectionName}`, e);
-      await this.bringUpAllInterfaces();
-    }
-  }
-
-  private async bringUpAllInterfaces() {
-    try {
-      this.logger.info("Trying to bring up all interfaces");
-      const up = Object.values(this.connectionMapper).map(({ name }) =>
-        $`nmcli device connect ${name}`.quiet(),
-      );
-
-      const [primaryConnection, backupConnection] =
-        await Promise.allSettled(up);
-
-      this.logger.info(
-        "Because something went wrong at last resort we tried to bring back all interfaces up",
-        {
-          primary: primaryConnection.status === "fulfilled" ? "✅" : "❌",
-          backup: backupConnection.status === "fulfilled" ? "✅" : "❌",
-        },
-      );
-    } catch (e) {
-      this.logger.error("Failed to bring up all interfaces", e);
+  private async handleHasNoRoutes(interfaceName: string) {
+    const routeInfos = await route.show({
+      dev: interfaceName,
+    });
+    if (!routeInfos) {
+      const interfaceNmcliUUid = await this.getUUID(interfaceName);
+      await $`nmcli connection modify ${interfaceNmcliUUid} ipv4.never-default no`;
+      const routeInfos = await route.show({
+        dev: interfaceName,
+      });
     }
   }
 
@@ -169,55 +151,77 @@ export class NmcliConnectionManager implements ConnectionManager {
     connectionType,
     priority,
   }: ConnectionPriority): Promise<void> {
-    const {interfaceName, fullName} = this.connectionMapper[connectionType];
-    const metric = toMetric(priority);
-    const routeMetrics = metric;
-    const autoconnectPriority = metric;
+    const { interfaceName } = this.connectionMapper[connectionType];
 
-    const deviceUUID = await this.getUUID(interfaceName);
+    const metric = (priority + 1) * 100;
 
-    const updateLinkPriority =
-      $`nmcli connection modify ${deviceUUID} ipv4.route-metric ${routeMetrics}`.quiet();
-    const updateLinkPriorityV6 =
-      $`nmcli connection modify ${deviceUUID} ipv6.route-metric ${routeMetrics}`.quiet();
-    const updateLinkAutoConnect =
-      $`nmcli connection modify ${deviceUUID} connection.autoconnect-priority ${autoconnectPriority}`.quiet();
+    let routeInfos = await route.show({
+      dev: interfaceName,
+    });
 
-    const [metricParam, metricParamV6, autoconnect] = (
-      await Promise.allSettled([
-        updateLinkPriority,
-        updateLinkPriorityV6,
-        updateLinkAutoConnect,
-      ])
-    ).map((promise) => promise.status === "fulfilled");
+    if (!this.connectionMapper[connectionType].hasDisabledDhcpRouteRule) {
+      const interfaceNmcliUUid = await this.getUUID(interfaceName);
+      await this.toggleDhcpRouteRule(interfaceNmcliUUid, false);
+      this.logger.info("Modifying connection to avoid dhcp route generation", {
+        connectionType,
+        interfaceName,
+      });
+    }
 
-    this.logger.info(
-      `Setting route priority for connection  ${connectionType} ${interfaceName}`,
-    );
+    if (!routeInfos) {
+      await this.reconnect(connectionType);
+    }
 
-    this.logger[metricParam ? LogLevel.Info : LogLevel.Warn](
-      `Connection ${fullName} ipv4.route-metric=${routeMetrics} ${metricParam ? "✅" : "❌"}`,
-    );
+    routeInfos = routeInfos
+      ? routeInfos
+      : await route.show({ dev: interfaceName });
 
-    this.logger[metricParamV6 ? LogLevel.Info : LogLevel.Warn](
-      `Connection ${fullName} ipv6.route-metric=${routeMetrics} ${metricParamV6 ? "✅" : "❌"}`,
-    );
+    for (const routeInfo of routeInfos as RouteInfo[]) {
+      this.logger.info(
+        `Setting route priority for connection  ${connectionType} ${interfaceName}`,
+        routeInfo,
+      );
+      const via = routeInfo.gateway
+        ? { via: { address: routeInfo.gateway } }
+        : {};
 
-    this.logger[autoconnect ? LogLevel.Info : LogLevel.Warn](
-      `Connection ${fullName} connection.autoconnect-priority=${autoconnectPriority} ${autoconnect ? "✅" : "❌"}`,
-    );
-    await this.reconnect(connectionType);
+      const d = await route.del({ to: routeInfo.dst, dev: interfaceName });
+      await route.flush({ table: RouteRoutingTables.Cache });
+
+      this.logger.info(
+        `Deleting route for connection  ${connectionType} ${interfaceName}`,
+      );
+
+      await route.flush({ table: RouteRoutingTables.Cache });
+
+      await route.replace({
+        table: RouteRoutingTables.Default,
+        to: routeInfo.dst,
+        dev: interfaceName,
+        ...via,
+        metric: metric,
+      });
+      await route.flush({ table: RouteRoutingTables.Cache });
+
+      this.logger.info(
+        `Adding route for connection  ${connectionType} ${interfaceName}`,
+      );
+    }
+  }
+
+  private toggleDhcpRouteRule(interfaceNmcliUUid: string, enable: boolean) {
+    const toggle = enable ? "yes" : "no";
+    return $`nmcli connection modify ${interfaceNmcliUUid} ipv4.never-default ${toggle}`;
   }
 
   async reconnect(connectionType: ConnectionType) {
     const start = performance.now();
     const { interfaceName, fullName } = this.getInterface(connectionType);
 
-    //See what is the best option reconnect / vs up/down
-    await this.reloadNmcli(interfaceName);
-    //const deviceUUID = await this.getUUID(interfaceName);
-    //await $`nmcli connection down uuid ${deviceUUID}`;
-    //await $`nmcli connection up uuid ${deviceUUID}`;
+    const deviceUUID = await this.getUUID(interfaceName);
+    await this.toggleDhcpRouteRule(deviceUUID, true);
+    await $`nmcli connection down uuid ${deviceUUID}`;
+    await $`nmcli connection up uuid ${deviceUUID}`;
 
     this.logger.info(`Connection ${fullName} reconnected successfully`);
 

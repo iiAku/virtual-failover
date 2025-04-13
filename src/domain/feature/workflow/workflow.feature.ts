@@ -41,11 +41,13 @@ export class Workflow {
       ),
     );
 
-    const eligibleConnection = sortedConnectionHealthyResults.filter(
+    const eligibleConnection = sortedConnectionHealthyResults.find(
       (connectionHealthyResult) => connectionHealthyResult?.healthy === true,
-    )[0].connectionType;
+    );
 
-    this.state.setMainConnection(eligibleConnection);
+    if (eligibleConnection) {
+      this.state.setMainConnection(eligibleConnection.connectionType);
+    }
   }
 
   private async noneStrategy([

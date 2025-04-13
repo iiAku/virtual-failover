@@ -16,7 +16,9 @@ async function bootstrap() {
 
   const appConfig = config.get<AppConfig>("_PROCESS_ENV_VALIDATED");
 
-  const everyFiveSeconds = Duration.fromObject({ seconds: 5 });
+  const everyFiveSeconds = Duration.fromObject({
+    seconds: appConfig.PRIMARY_CHECK_INTERVAL_IN_SECONDS,
+  });
 
   while (true) {
     await workflow.handler(
