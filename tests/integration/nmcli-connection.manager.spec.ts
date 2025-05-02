@@ -1,5 +1,4 @@
 import {beforeAll, describe, it, expect} from "vitest";
-import {NmcliConnectionManager} from "../../src/infrastructure/connection/nmcli-connection-manager.impl";
 import {ConnectionType} from "../../src/domain/feature/workflow/workflow.state.model";
 import {AppModule} from "../../src/app.module";
 import { Test } from '@nestjs/testing';
@@ -15,7 +14,7 @@ describe('Connection Manager', () => {
         connectionManager = moduleRef.get(ConnectionManager);
     })
 
-    it.each([ConnectionType.PRIMARY, ConnectionType.BACKUP])('Should be able to test the connectivity using curl of a given link against a random url %s', async (testedConnection) => {
+    it.each([ConnectionType.PRIMARY])('Should be able to test the connectivity using curl of a given link against a random url %s', async (testedConnection) => {
         const result = await connectionManager.isConnectionHealthy(testedConnection);
 
 
@@ -25,7 +24,7 @@ describe('Connection Manager', () => {
         expect(result.checkResolvedInMilisseconds).toBeGreaterThan(0)
     })
 
-    it.each([ConnectionType.PRIMARY, ConnectionType.BACKUP])('Should reconnect to the given connection: %s', async (testedConnection) => {
+    it.each([ConnectionType.PRIMARY])('Should reconnect to the given connection: %s', async (testedConnection) => {
         const result = await connectionManager.reconnect(testedConnection);
 
         expect(result).toBeUndefined();

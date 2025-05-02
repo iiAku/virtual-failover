@@ -39,7 +39,6 @@ export class Workflow {
         priority: i,
         connectionType: connectionHealthyResult.connectionType,
       });
-      await setTimeout(500);
     }
 
     const eligibleConnection = sortedConnectionHealthyResults.find(
