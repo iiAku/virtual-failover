@@ -1,28 +1,14 @@
 import { Module } from "@nestjs/common";
-import { ConfigModule } from "@nestjs/config";
+import { ConfigModule, ConfigService } from "@nestjs/config";
 import { LoggerModule } from "nestjs-pino";
 import { appConfig } from "./app.config";
-import { ConnectionManagerService } from "./connection-manager.service";
-import { Logger } from "./system/logger/logger.port";
+import { Logger } from "./domain/logger.port";
 import { NestPinoLogger } from "./system/logger/nest-pino.logger";
-
-export enum LogLevel {
-  Trace = "trace",
-  Debug = "debug",
-  Info = "info",
-  Warn = "warn",
-  Error = "error",
-  Fatal = "fatal",
-}
-
-const levelStrings = {
-  10: LogLevel.Trace,
-  20: LogLevel.Debug,
-  30: LogLevel.Info,
-  40: LogLevel.Warn,
-  50: LogLevel.Error,
-  60: LogLevel.Fatal,
-};
+import { ConnectionManager } from "./domain/feature/connection/connection-manager.port";
+import { NmcliConnectionManager } from "./infrastructure/connection/nmcli-connection-manager.impl";
+import { Workflow } from "./domain/feature/workflow/workflow.feature";
+import { pinoParams } from "./infrastructure/logger/pino.params";
+import { WorkflowState } from "./domain/feature/workflow/workflow.state.model";
 
 @Module({
   imports: [
@@ -30,19 +16,26 @@ const levelStrings = {
       isGlobal: true,
       validate: (config: unknown) => appConfig.parse(config),
     }),
-    LoggerModule.forRoot({
-      pinoHttp: {
-        formatters: {
-          level(label, number) {
-            return { level: levelStrings[number] || label };
-          },
-        },
-      },
-    }),
+    LoggerModule.forRoot(pinoParams),
   ],
   providers: [
     { provide: Logger, useClass: NestPinoLogger },
-    ConnectionManagerService,
+    {
+      provide: ConnectionManager,
+      useFactory: (logger: Logger, config) =>
+        new NmcliConnectionManager(logger, config),
+      inject: [Logger, ConfigService],
+    },
+    WorkflowState,
+    {
+      provide: Workflow,
+      useFactory: (
+        connectionManager: ConnectionManager,
+        workflowState: WorkflowState,
+        logger: Logger,
+      ) => new Workflow(connectionManager, workflowState, logger),
+      inject: [ConnectionManager, WorkflowState, Logger],
+    },
   ],
 })
 export class AppModule {}

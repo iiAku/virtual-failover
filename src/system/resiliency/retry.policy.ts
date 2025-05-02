@@ -6,6 +6,6 @@ import {
 } from "cockatiel";
 
 export const retryPolicy = retry(handleAll, {
-  maxAttempts: 1,
+  maxAttempts: 3,
   backoff: new ConstantBackoff(50),
 });

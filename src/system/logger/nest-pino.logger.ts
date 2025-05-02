@@ -1,7 +1,7 @@
-import { Logger } from "./logger.port";
+import { Logger } from "../../domain/logger.port";
 import { PinoLogger } from "nestjs-pino";
 import { Injectable } from "@nestjs/common";
-import { LogLevel } from "./logger.port";
+import { LogLevel } from "../../domain/logger.port";
 
 @Injectable()
 export class NestPinoLogger implements Logger {
