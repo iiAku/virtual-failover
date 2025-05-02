@@ -6,6 +6,7 @@ import {
 import { ConnectionState } from "../connection/connection.type";
 import { ConnectionType, WorkflowState } from "./workflow.state.model";
 import { sortedConnectionCheck } from "./sort.helper";
+import { setTimeout } from "node:timers/promises";
 
 export class Workflow {
   constructor(
@@ -32,14 +33,14 @@ export class Workflow {
       return;
     }
 
-    await Promise.all(
-      sortedConnectionHealthyResults.map((connectionHealthyResult, priority) =>
-        this.connectionManager.setPriority({
-          priority,
-          connectionType: connectionHealthyResult.connectionType,
-        }),
-      ),
-    );
+    for (let i = 0; i < sortedConnectionHealthyResults.length; i++) {
+      const connectionHealthyResult = sortedConnectionHealthyResults[i];
+      await this.connectionManager.setPriority({
+        priority: i,
+        connectionType: connectionHealthyResult.connectionType,
+      });
+      await setTimeout(500);
+    }
 
     const eligibleConnection = sortedConnectionHealthyResults.find(
       (connectionHealthyResult) => connectionHealthyResult?.healthy === true,
