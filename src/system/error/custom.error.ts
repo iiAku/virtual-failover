@@ -4,10 +4,12 @@ export enum ErrorCode {
   UNKNOWN_ERROR = "UNKNOWN_ERROR",
   UNKNOWN_CONNECTION_LINK = "UNKNOWN_CONNECTION_LINK",
   UNABLE_TO_GET_IFACE_UUID = "UNABLE_TO_GET_IFACE_UUID",
+  CONNECTIVITY_CHECK_FAILED = "CONNECTIVITY_CHECK_FAILED",
 }
 
 export const CustomErrorToMessage: { [key in ErrorCode]: string } = {
   [ErrorCode.UNKNOWN_ERROR]: "Unknown error",
+  [ErrorCode.CONNECTIVITY_CHECK_FAILED]: "Connectivity check failed (retrying)",
   [ErrorCode.UNABLE_TO_GET_IFACE_UUID]:
     "We couldn't get the UUID for the provided connection",
   [ErrorCode.UNKNOWN_CONNECTION_LINK]:
@@ -18,13 +20,13 @@ export class CustomError extends Error {
   public readonly errorCode: ErrorCode;
   public readonly context: ErrorContext;
 
-  constructor(errorCode: ErrorCode, context: ErrorContext) {
+  constructor(errorCode: ErrorCode, context?: ErrorContext) {
     super(
       CustomErrorToMessage[errorCode] ??
         CustomErrorToMessage[ErrorCode.UNKNOWN_ERROR],
     );
     this.errorCode = errorCode;
-    this.context = context;
+    this.context = context ? { ...context } : {};
     this.name = CustomError.name;
   }
 }

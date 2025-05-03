@@ -9,7 +9,7 @@ import { ConfigService } from "@nestjs/config";
 import { AppConfig, MONITORING_URL } from "../../app.config";
 import { IRetryContext } from "cockatiel";
 import { $ } from "bun";
-import { retryPolicy } from "../../system/resiliency/retry.policy";
+import { MAX_RETRIES, retryPolicy } from "../../system/resiliency/retry.policy";
 import { CustomError, ErrorCode } from "../../system/error/custom.error";
 import { z } from "zod";
 import { setTimeout } from "node:timers/promises";
@@ -90,9 +90,14 @@ export class NmcliConnectionManager implements ConnectionManager {
       interfaceName,
       monitoringUrl,
     });
-    return $`curl --interface ${interfaceName} -sI --max-time 1 --connect-timeout 1 ${monitoringUrl}`
-      .quiet()
-      .nothrow();
+    const hasConnectivity =
+      await $`curl --interface ${interfaceName} -sI --max-time 1 --connect-timeout 1 ${monitoringUrl}`
+        .quiet()
+        .nothrow();
+    if (hasConnectivity.exitCode !== 0 && ctx.attempt < MAX_RETRIES) {
+      throw new CustomError(ErrorCode.CONNECTIVITY_CHECK_FAILED);
+    }
+    return hasConnectivity;
   }
 
   private async getUUID(connectionName: string) {
