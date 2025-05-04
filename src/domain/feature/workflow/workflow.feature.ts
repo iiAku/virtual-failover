@@ -6,7 +6,6 @@ import {
 import { ConnectionState } from "../connection/connection.type";
 import { ConnectionType, WorkflowState } from "./workflow.state.model";
 import { sortedConnectionCheck } from "./sort.helper";
-import { setTimeout } from "node:timers/promises";
 
 export class Workflow {
   constructor(

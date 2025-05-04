@@ -13,6 +13,7 @@ import { MAX_RETRIES, retryPolicy } from "../../system/resiliency/retry.policy";
 import { CustomError, ErrorCode } from "../../system/error/custom.error";
 import { z } from "zod";
 import { setTimeout } from "node:timers/promises";
+import { Duration } from "luxon";
 
 export class NmcliConnectionManager implements ConnectionManager {
   private readonly appConfig: AppConfig;
@@ -165,15 +166,15 @@ export class NmcliConnectionManager implements ConnectionManager {
     const start = performance.now();
     const { interfaceName, fullName } = this.getInterface(connectionType);
 
-    const deviceUUID = await this.getUUID(interfaceName);
-    await $`nmcli connection down uuid ${deviceUUID}`;
-    await $`nmcli connection up uuid ${deviceUUID}`;
+    await $`nmcli device reapply ${interfaceName}`.quiet();
 
-    this.logger.info(`Connection ${fullName} reconnected successfully`);
+    this.logger.info(`Connection ${fullName} applied changes successfully`);
 
     const end = performance.now();
     const diff = Math.round(end - start);
-    this.logger.info(`Connection ${fullName}) took ${diff}ms to restart.`);
-    await setTimeout(1000);
+    this.logger.info(`Connection ${fullName}) took ${diff}ms to apply changes`);
+    await setTimeout(
+      Duration.fromObject({ milliseconds: 250 }).as("milliseconds"),
+    );
   }
 }
