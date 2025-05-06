@@ -26,10 +26,7 @@ export class NmcliConnectionManager implements ConnectionManager {
       fullName: string;
     };
   };
-  private readonly ONE_SEC = Duration.fromObject({ second: 1 }).as(
-    "milliseconds",
-  );
-
+  
   constructor(
     private readonly logger: Logger,
     config: ConfigService,
@@ -156,7 +153,8 @@ export class NmcliConnectionManager implements ConnectionManager {
     const updateLinkPriority = $`nmcli connection modify ${deviceUUID} ipv4.route-metric ${metric}`;
     const updateLinkPriorityV6 = $`nmcli connection modify ${deviceUUID} ipv6.route-metric ${metric}`;
 
-    await Promise.all([updateLinkPriority, updateLinkPriorityV6]);
+    await updateLinkPriority;
+    await updateLinkPriorityV6;
 
     await this.reconnect(connectionType);
 
@@ -176,6 +174,5 @@ export class NmcliConnectionManager implements ConnectionManager {
     const end = performance.now();
     const diff = Math.round(end - start);
     this.logger.info(`Connection ${fullName}) took ${diff}ms to apply changes`);
-    await setTimeout(this.ONE_SEC);
   }
 }
