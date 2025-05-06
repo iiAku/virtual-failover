@@ -27,15 +27,18 @@ export class Workflow {
       connectionHealthyResults,
     ).filter(Boolean);
 
-    if (sortedConnectionHealthyResults.length === 0) {
+    const numberOfConnection = sortedConnectionHealthyResults.length;
+
+    if (numberOfConnection === 0) {
       this.logger.info("No healthy connections available.");
       return;
     }
 
-    for (let i = 0; i < sortedConnectionHealthyResults.length; i++) {
+    for (let i = numberOfConnection - 1; i >= 0; i--) {
+      const priority = i;
       const connectionHealthyResult = sortedConnectionHealthyResults[i];
       await this.connectionManager.setPriority({
-        priority: i,
+        priority,
         connectionType: connectionHealthyResult.connectionType,
       });
     }
