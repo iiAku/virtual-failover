@@ -155,10 +155,7 @@ export class NmcliConnectionManager implements ConnectionManager {
 
     const deviceUUID = await this.getUUID(interfaceName);
 
-    const updateLinkPriority = $`nmcli connection modify ${deviceUUID} ipv4.route-metric ${metric}`;
-    const updateLinkPriorityV6 = $`nmcli connection modify ${deviceUUID} ipv6.route-metric ${metric}`;
-
-    await Promise.all([updateLinkPriority, updateLinkPriorityV6]);
+    await $`nmcli connection modify ${deviceUUID} ipv4.route-metric ${metric} +ipv6.route-metric ${metric}`;
 
     await this.reconnect(connectionType);
 
