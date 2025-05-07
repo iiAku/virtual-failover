@@ -25,25 +25,34 @@ async function bootstrap() {
 
   const primaryDelay = Duration.fromObject({
     seconds: appConfig.PRIMARY_CHECK_INTERVAL_IN_SECONDS,
-  }).as("milliseconds");
+  });
 
   const backupDelay = Duration.fromObject({
     seconds: appConfig.BACKUP_CHECK_INTERVAL_IN_SECONDS,
-  }).as("milliseconds");
+  });
 
   while (true) {
+    const start = performance.now();
     await workflow.handler(
       ConnectionType.PRIMARY,
       ConnectionType.BACKUP,
       appConfig.FALLBACK_CONNECTION ? ConnectionType.FALLBACK : undefined,
     );
-    const delay = [ConnectionState.BACKUP, ConnectionState.FALLBACK].includes(
-      state.getCurrentConnectionState(),
-    )
+    const end = performance.now();
+
+    const elapsed = Duration.fromMillis(end - start);
+    logger.info(`Checks took ${elapsed.as('milliseconds')}ms to run`);
+
+    const baseDelay = [
+      ConnectionState.BACKUP,
+      ConnectionState.FALLBACK,
+    ].includes(state.getCurrentConnectionState())
       ? backupDelay
       : primaryDelay;
-    logger.info("Current check delay", delay);
-    await setTimeout(delay);
+
+    const delay = baseDelay.plus(elapsed);
+    logger.info("Current check delay in seconds", delay.as("seconds"));
+    await setTimeout(delay.as("milliseconds"));
   }
 }
 bootstrap();

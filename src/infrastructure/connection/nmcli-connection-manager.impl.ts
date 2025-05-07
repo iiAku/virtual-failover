@@ -94,10 +94,12 @@ export class NmcliConnectionManager implements ConnectionManager {
       interfaceName,
       monitoringUrl,
     });
+
     const hasConnectivity =
       await $`curl --interface ${interfaceName} -sI --max-time 1 --connect-timeout 1 ${monitoringUrl}`
         .quiet()
         .nothrow();
+
     if (hasConnectivity.exitCode !== 0 && ctx.attempt < MAX_RETRIES) {
       throw new CustomError(ErrorCode.CONNECTIVITY_CHECK_FAILED);
     }
