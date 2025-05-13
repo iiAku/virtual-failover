@@ -5,7 +5,7 @@ import {
   retry,
 } from "cockatiel";
 
-export const MAX_RETRIES = 3;
+export const MAX_RETRIES = 2;
 
 export const retryPolicy = retry(handleAll, {
   maxAttempts: MAX_RETRIES,

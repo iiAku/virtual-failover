@@ -6,6 +6,8 @@ import {
 import { ConnectionState } from "../connection/connection.type";
 import { ConnectionType, WorkflowState } from "./workflow.state.model";
 import { sortedConnectionCheck } from "./sort.helper";
+import { setTimeout } from "node:timers/promises";
+import { Duration } from "luxon";
 
 export class Workflow {
   constructor(
@@ -50,6 +52,14 @@ export class Workflow {
     if (eligibleConnection) {
       this.state.setMainConnection(eligibleConnection.connectionType);
     }
+
+    const cooldownPeriod = Duration.fromObject({ seconds: 30 });
+
+    this.logger.info(
+      `Connection ${eligibleConnection?.connectionType} is now the main connection. Cooling down for ${cooldownPeriod.as("seconds")} seconds.`,
+    );
+
+    await setTimeout(cooldownPeriod.as("milliseconds"));
   }
 
   private async noneStrategy([

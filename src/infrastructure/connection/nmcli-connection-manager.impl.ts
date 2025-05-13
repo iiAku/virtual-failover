@@ -175,6 +175,5 @@ export class NmcliConnectionManager implements ConnectionManager {
     const end = performance.now();
     const diff = Math.round(end - start);
     this.logger.info(`Connection ${fullName}) took ${diff}ms to apply changes`);
-    await setTimeout(this.ONE_SEC);
   }
 }

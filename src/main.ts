@@ -41,7 +41,7 @@ async function bootstrap() {
     const end = performance.now();
 
     const elapsed = Duration.fromMillis(end - start);
-    logger.info(`Checks took ${elapsed.as('milliseconds')}ms to run`);
+    logger.info(`Checks took ${elapsed.as("milliseconds")}ms to run`);
 
     const baseDelay = [
       ConnectionState.BACKUP,
