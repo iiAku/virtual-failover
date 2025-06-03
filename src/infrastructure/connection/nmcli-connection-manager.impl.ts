@@ -12,8 +12,6 @@ import { $ } from "bun";
 import { MAX_RETRIES, retryPolicy } from "../../system/resiliency/retry.policy";
 import { CustomError, ErrorCode } from "../../system/error/custom.error";
 import { z } from "zod";
-import { setTimeout } from "node:timers/promises";
-import { Duration } from "luxon";
 
 export class NmcliConnectionManager implements ConnectionManager {
   private readonly appConfig: AppConfig;
@@ -26,9 +24,6 @@ export class NmcliConnectionManager implements ConnectionManager {
       fullName: string;
     };
   };
-  private readonly ONE_SEC = Duration.fromObject({ second: 1 }).as(
-    "milliseconds",
-  );
 
   constructor(
     private readonly logger: Logger,
@@ -168,12 +163,14 @@ export class NmcliConnectionManager implements ConnectionManager {
     const start = performance.now();
     const { interfaceName, fullName } = this.getInterface(connectionType);
 
-    await $`nmcli device reapply ${interfaceName}`.quiet();
+    const deviceUUID = await this.getUUID(interfaceName);
+    await $`nmcli connection down uuid ${deviceUUID}`.nothrow();
+    await $`nmcli connection up uuid ${deviceUUID}`.nothrow();
 
-    this.logger.info(`Connection ${fullName} applied changes successfully`);
+    this.logger.info(`Connection ${fullName} reconnected successfully`);
 
     const end = performance.now();
     const diff = Math.round(end - start);
-    this.logger.info(`Connection ${fullName}) took ${diff}ms to apply changes`);
+    this.logger.info(`Connection ${fullName} took ${diff}ms to restart`);
   }
 }

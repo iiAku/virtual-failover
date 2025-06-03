@@ -34,8 +34,9 @@ export const appConfig = z.object({
   PRIMARY_CONNECTION: z.string(),
   BACKUP_CONNECTION: z.string(),
   FALLBACK_CONNECTION: z.string().optional(),
+  COOLDOWN_SECONDS: z.number().default(30),
   PRIMARY_CHECK_INTERVAL_IN_SECONDS: z.coerce.number().default(5),
-  BACKUP_CHECK_INTERVAL_IN_SECONDS: z.coerce.number().default(30),
+  BACKUP_CHECK_INTERVAL_IN_SECONDS: z.coerce.number().default(10),
 });
 
 export type AppConfig = z.infer<typeof appConfig>;
