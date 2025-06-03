@@ -13,6 +13,7 @@ export const sortSpecificElements = <T>(
 
 const isBackup = (connection: ConnectionHealthyResult) =>
   connection && connection.connectionType === ConnectionType.BACKUP;
+
 const isFallback = (connection: ConnectionHealthyResult) =>
   connection && connection.connectionType === ConnectionType.FALLBACK;
 

@@ -8,6 +8,7 @@ import { ConnectionType, WorkflowState } from "./workflow.state.model";
 import { sortedConnectionCheck } from "./sort.helper";
 import { setTimeout } from "node:timers/promises";
 import { Duration } from "luxon";
+import { isDefined } from "./is-defined";
 
 export class Workflow {
   constructor(
@@ -27,23 +28,26 @@ export class Workflow {
 
     const sortedConnectionHealthyResults = sortedConnectionCheck(
       connectionHealthyResults,
-    ).filter(Boolean);
+    ).filter(isDefined);
 
-    const numberOfConnection = sortedConnectionHealthyResults.length;
-
-    if (numberOfConnection === 0) {
-      this.logger.info("No healthy connections available.");
+    if (sortedConnectionHealthyResults.length === 0) {
+      this.logger.info("No healthy connections available - nothing to do.");
       return;
     }
 
-    for (let i = numberOfConnection - 1; i >= 0; i--) {
-      const priority = i;
-      const connectionHealthyResult = sortedConnectionHealthyResults[i];
-      await this.connectionManager.setPriority({
-        priority,
-        connectionType: connectionHealthyResult.connectionType,
-      });
-    }
+    await Promise.all(
+      sortedConnectionHealthyResults.map(
+        (sortedConnectionHealthyResults, priority) => {
+          this.logger.info(
+            `Connection ${sortedConnectionHealthyResults.connectionType} is set to priority ${priority}`,
+          );
+          return this.connectionManager.setPriority({
+            priority,
+            connectionType: sortedConnectionHealthyResults.connectionType,
+          });
+        },
+      ),
+    );
 
     const eligibleConnection = sortedConnectionHealthyResults.find(
       (connectionHealthyResult) => connectionHealthyResult?.healthy === true,
@@ -52,14 +56,6 @@ export class Workflow {
     if (eligibleConnection) {
       this.state.setMainConnection(eligibleConnection.connectionType);
     }
-
-    const cooldownPeriod = Duration.fromObject({ seconds: 30 });
-
-    this.logger.info(
-      `Connection ${eligibleConnection?.connectionType} is now the main connection. Cooling down for ${cooldownPeriod.as("seconds")} seconds.`,
-    );
-
-    await setTimeout(cooldownPeriod.as("milliseconds"));
   }
 
   private async noneStrategy([

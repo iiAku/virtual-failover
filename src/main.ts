@@ -32,6 +32,7 @@ async function bootstrap() {
   });
 
   while (true) {
+    const beforeCurrentConnectionState = state.getCurrentConnectionState();
     const start = performance.now();
     await workflow.handler(
       ConnectionType.PRIMARY,
@@ -41,7 +42,9 @@ async function bootstrap() {
     const end = performance.now();
 
     const elapsed = Duration.fromMillis(end - start);
-    logger.info(`Checks took ${elapsed.as("milliseconds")}ms to run`);
+    logger.info(
+      `Checks took ${elapsed.as("milliseconds").toFixed(3)}ms to run`,
+    );
 
     const baseDelay = [
       ConnectionState.BACKUP,
@@ -50,8 +53,24 @@ async function bootstrap() {
       ? backupDelay
       : primaryDelay;
 
-    const delay = baseDelay.plus(elapsed);
-    logger.info("Current check delay in seconds", delay.as("seconds"));
+    const afterCurrentConnectionState = state.getCurrentConnectionState();
+
+    const cooldown = Duration.fromObject({
+      seconds:
+        beforeCurrentConnectionState !== afterCurrentConnectionState
+          ? appConfig.COOLDOWN_SECONDS
+          : 0,
+    });
+
+    const delay = baseDelay.plus(elapsed).plus(cooldown);
+
+    logger.info("Current check delay in seconds", {
+      elapsed: elapsed.as("seconds").toFixed(3),
+      cooldown: cooldown.as("seconds").toFixed(3),
+      baseDelay: baseDelay.as("seconds").toFixed(3),
+      total: delay.as("seconds").toFixed(3),
+    });
+
     await setTimeout(delay.as("milliseconds"));
   }
 }
